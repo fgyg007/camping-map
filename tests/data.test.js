@@ -27,3 +27,9 @@ test('AMap HTTPS link uses GCJ longitude first and shares no notes or label',()=
  assert.equal(u.searchParams.get('to'),'116.403714,39.910226');
  assert.equal(u.searchParams.get('coordinate'),'gaode');assert.ok(!u.href.includes('private'));
 });
+
+import {makePlaceId} from '../src/data.js';
+test('WebView without randomUUID uses secure random bytes, never a weak ID',()=>{
+ assert.equal(makePlaceId({getRandomValues:bytes=>bytes.fill(255)}),'ffffffff-ffff-4fff-bfff-ffffffffffff');
+ assert.throws(()=>makePlaceId({}),/WebView/);
+});

@@ -16,7 +16,7 @@ const KEY='camping-map-v1';
 const symbols={'湖畔':Waves,'山野':Trees,'海边':Waves,'服务区':Car,'其他':Mountain};
 function load(){try{const raw=localStorage.getItem(KEY);return {places:raw?parseBackup(raw):samples,error:''};}catch{return {places:[],error:'本机数据无法读取。为保护原记录，暂不覆盖；请先导出原始数据备份，再刷新重试。'};}}
 function App(){
- const [initial]=useState(load),[places,setPlaces]=useState(initial.places),[storageError,setStorageError]=useState(initial.error),[query,setQuery]=useState(''),[category,setCategory]=useState('全部'),[onlyFavorites,setOnlyFavorites]=useState(false),[selected,setSelected]=useState(null),[editing,setEditing]=useState(null),[view,setView]=useState('map'),[toast,setToast]=useState(''),[tileError,setTileError]=useState(false),[incoming,setIncoming]=useState('');
+ const [initial]=useState(load),[places,setPlaces]=useState(initial.places),[storageError,setStorageError]=useState(initial.error),[query,setQuery]=useState(''),[category,setCategory]=useState('全部'),[onlyFavorites,setOnlyFavorites]=useState(false),[selected,setSelected]=useState(null),[editing,setEditing]=useState(null),[view,setView]=useState('map'),[toast,setToast]=useState(''),[tileError,setTileError]=useState(false),[incoming,setIncoming]=useState(''),[savedPoint,setSavedPoint]=useState(null),[editorError,setEditorError]=useState('');
  const mapEl=useRef(null),map=useRef(null),markers=useRef(null),file=useRef(null);
  const filtered=places.filter(p=>(category==='全部'||p.category===category)&&(!onlyFavorites||p.favorite)&&(p.name+p.notes+p.category).toLowerCase().includes(query.toLowerCase()));
  const current=places.find(p=>p.id===selected);
@@ -30,9 +30,21 @@ function App(){
  },[]);
  function message(t){setToast(t);}
  useEffect(()=>{if(toast){const t=setTimeout(()=>setToast(''),4200);return ()=>clearTimeout(t)}},[toast]);
- function save(next){if(storageError){message('请先导出原始数据，解决读取错误后重试');return false;}try{localStorage.setItem(KEY,JSON.stringify({version:1,places:next}));setPlaces(next);return true;}catch{message('保存失败：设备存储不可用或空间不足，请导出备份');return false;}}
+ function save(next,{editor=false}={}){
+  const fail=(reason)=>{if(editor)setEditorError(reason);else message(reason);return false;};
+  if(storageError)return fail('请先导出原始数据，解决读取错误后重试。');
+  if(next.length>5000)return fail('地点数量不能超过 5000 个，请先导出备份。');
+  try{
+   const payload=JSON.stringify({version:1,places:next});
+   localStorage.setItem(KEY,payload);
+   if(localStorage.getItem(KEY)!==payload)throw Error();
+   setPlaces(next);
+   return true;
+  }catch{return fail('未确认保存成功：设备存储不可用或空间不足。请先导出备份。');}
+ }
  useEffect(()=>{
-  map.current=L.map(mapEl.current,{zoomControl:false}).setView([30.35,120.13],9);
+  const last=initial.places.find(p=>!p.demo);
+  map.current=L.map(mapEl.current,{zoomControl:false}).setView(last?[last.lat,last.lng]:[30.35,120.13],last?12:9);
   L.control.zoom({position:'bottomright'}).addTo(map.current);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).on('tileerror',()=>setTileError(true)).addTo(map.current);
   markers.current=L.layerGroup().addTo(map.current);
@@ -40,11 +52,15 @@ function App(){
  },[]);
  useEffect(()=>{markers.current.clearLayers();filtered.forEach(p=>{
   const icon=L.divIcon({className:'camp-marker',html:`<span class="${p.id===selected?'active':''}">${p.category==='山野'?'♠':'⌂'}</span>`,iconSize:[38,42],iconAnchor:[19,42]});
-  const marker=L.marker([p.lat,p.lng],{icon}).addTo(markers.current).on('click',()=>setSelected(p.id));
+  const marker=L.marker([p.lat,p.lng],{icon,title:p.name}).addTo(markers.current).on('click',()=>setSelected(p.id));
   const label=document.createElement('span');label.textContent=p.name;marker.bindTooltip(label);
  });},[places,query,category,onlyFavorites,selected]);
  useEffect(()=>{if(current)map.current.flyTo([current.lat,current.lng],12,{duration:.6});},[selected]);
- useEffect(()=>{setTimeout(()=>map.current.invalidateSize(),100);},[view]);
+ useEffect(()=>{const timer=setTimeout(()=>map.current?.invalidateSize(),100);return ()=>clearTimeout(timer);},[view]);
+ useEffect(()=>{
+  if(!savedPoint)return;
+  map.current?.flyTo([savedPoint.lat,savedPoint.lng],13,{duration:.35});
+ },[savedPoint]);
  function toggle(p){save(places.map(x=>x.id===p.id?{...x,favorite:!x.favorite}:x));}
  async function download(){try{const raw=storageError?localStorage.getItem(KEY):JSON.stringify({version:1,places},null,2);if(!raw)throw Error();if(Capacitor.isNativePlatform()){const saved=await Filesystem.writeFile({path:'camping-map-backup.json',data:raw,directory:Directory.Cache,encoding:Encoding.UTF8});await Share.share({title:'营地备份',url:saved.uri});return;}const url=URL.createObjectURL(new Blob([raw],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=`camping-map-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);message('已生成备份文件');}catch{message('导出失败，请检查浏览器下载权限');}}
  async function importFile(e){const f=e.target.files[0];e.target.value='';if(!f)return;try{if(f.size>5e6)throw Error('备份文件不能超过 5 MB');const data=parseBackup(await f.text());const ids=new Set(places.map(x=>x.id));const added=data.filter(x=>!ids.has(x.id));if(save([...places,...added]))message(`已导入 ${added.length} 个地点，跳过 ${data.length-added.length} 个重复记录`);}catch(err){message('导入失败：'+err.message);}}
@@ -63,11 +79,19 @@ function App(){
   </section><footer><span>野泊 / 个人露营手账</span><span>演示地点未经实测 · 出行前请核实开放与通行情况</span><span>v0.1.0</span></footer>
   </main>
   {current&&!editing&&<div className="overlay" onClick={()=>setSelected(null)}><section className="dialog detail" role="dialog" aria-modal="true" aria-label="地点详情" onClick={e=>e.stopPropagation()}><button className="close" aria-label="关闭详情" onClick={()=>setSelected(null)}><X/></button><div className={'detail-art scenery-'+current.category}><Tent size={62}/><span>{current.category} / {current.demo?'演示地点':'我的地点'}</span></div><div className="detail-body"><span className="eyebrow">YOUR NEXT STAY</span><h2>{current.name}</h2><div className="tags"><span>{current.status}</span>{current.facilities.map(f=><span key={f}>{f}</span>)}</div><p className="notes">{current.notes||'暂无备注'}</p><dl><div><dt>WGS-84 坐标</dt><dd>{current.lat.toFixed(6)}, {current.lng.toFixed(6)}</dd></div><div><dt>现场限高</dt><dd>{current.heightLimit?`${current.heightLimit} 米`:'未记录，请现场确认'}</dd></div><div><dt>最近核实</dt><dd>{current.verifiedAt||'尚未核实'}</dd></div></dl>{current.demo&&<p className="warning">这是演示记录，不代表真实可露营地点。</p>}<a className="primary navigation" href={navigationUrl(current)} target="_blank" rel="noreferrer"><Navigation size={18}/>Google 地图导航<ArrowUpRight size={17}/></a>{amapRoute(current)&&<a className="primary navigation" href={amapRoute(current)} target="_blank" rel="noreferrer"><Navigation size={18}/>高德路线规划<ArrowUpRight size={17}/></a>}<p className="hint">打开路线规划会把目的地坐标发送给对应地图服务。导航需要网络；也可复制坐标到支持 WGS-84 的地图。</p><div className="detail-actions"><button onClick={async()=>{try{await navigator.clipboard.writeText(`${current.lat}, ${current.lng}`);message('已复制 WGS-84 坐标');}catch{message('无法自动复制，请长按坐标手动复制');}}}>复制坐标</button><button onClick={()=>setEditing(current)}><Pencil size={15}/>编辑</button><button className="danger" onClick={()=>{if(confirm(`删除“${current.name}”？此操作不可撤销。`)&&save(places.filter(p=>p.id!==current.id))){setSelected(null);message('地点已删除');}}}><Trash2 size={15}/>删除</button></div></div></section></div>}
-  {editing&&<Editor place={editing} onClose={()=>setEditing(null)} onSave={p=>{const next=editing.id?places.map(x=>x.id===p.id?p:x):[p,...places];if(save(next)){setEditing(null);setSelected(p.id);message('地点已保存到本机');}}}/>}
+  {editing&&<Editor place={editing} saveError={editorError} onClose={()=>{setEditorError('');setEditing(null);}} onSave={p=>{
+   setEditorError('');
+   const next=editing.id?places.map(x=>x.id===p.id?p:x):[p,...places];
+   if(save(next,{editor:true})){
+    setQuery('');setCategory('全部');setOnlyFavorites(false);setView('map');
+    setEditing(null);setSelected(null);setSavedPoint(p);
+    message('已保存到首页：'+p.name);
+   }
+  }}/>}
   {toast&&<div className="toast" role="status"><Check size={17}/>{toast}</div>}
  </div>
 }
-function Editor({place,onClose,onSave}){
+function Editor({place,onClose,onSave,saveError}){
  const [draft,setDraft]=useState({name:'',lat:'',lng:'',category:'其他',status:'待核实',notes:'',facilities:[],heightLimit:'',verifiedAt:'',...place}),[error,setError]=useState(''),[system,setSystem]=useState('wgs84'),[link,setLink]=useState(place.shareText||''),[preview,setPreview]=useState(null),[importError,setImportError]=useState(''),[resolving,setResolving]=useState(false);
  useEffect(()=>{
   if(!place.shareText)return;
@@ -99,6 +123,6 @@ function Editor({place,onClose,onSave}){
   }catch(err){
    setImportError(String(err.message).startsWith('amap_')?'未能从高德取得明确地点，请核对网络与链接。':err.message);
   }finally{setResolving(false);}
- }}>{resolving?'正在向高德读取点位…':'预览链接坐标'}</button>{importError&&<p className="warning" role="alert">{importError}</p>}{preview&&<div><p>来源：{preview.source} · {preview.datum.toUpperCase()} · {preview.original.lat}, {preview.original.lng}</p>{preview.assumedDatum&&<p className="hint">按高德 GCJ-02 约定换算（分享格式未公开保证）。请核对原图钉：{preview.name||'无名称'}。</p>}<p>保存坐标（WGS-84）：{preview.lat.toFixed(6)}, {preview.lng.toFixed(6)}</p><button type="button" onClick={()=>{setDraft(d=>({...d,lat:preview.lat,lng:preview.lng,name:d.name||preview.name||''}));setSystem('wgs84');setPreview(null);setLink('');}}>填入表单</button></div>}<p className="hint">长链接仅在本机读取。Android 预览短链接时仅向高德请求跳转头，不上传备注或保存链接。填入后请核对并保存。</p></details>}<form onSubmit={e=>{e.preventDefault();try{onSave(validatePlace({...draft,...toWgs(draft.lat,draft.lng,system)}));}catch(err){setError(err.message);}}}><label>地点名称<input autoFocus required maxLength={80} value={draft.name} onChange={e=>set('name',e.target.value)} placeholder="例如：湖边停车场"/></label><label>输入坐标系<select disabled={resolving} value={system} onChange={e=>setSystem(e.target.value)}><option value="wgs84">GPS / WGS-84</option><option value="gcj02">高德 / 腾讯 (GCJ-02)</option><option value="bd09">百度经纬度 (BD-09)</option></select></label><div className="form-row"><label>纬度<input required disabled={resolving} type="number" step="any" min="-90" max="90" value={draft.lat} onChange={e=>set('lat',e.target.value)} placeholder="30.250000"/></label><label>经度<input required disabled={resolving} type="number" step="any" min="-180" max="180" value={draft.lng} onChange={e=>set('lng',e.target.value)} placeholder="120.150000"/></label></div><p className="hint">请选择与来源一致的坐标系。保存时近似转换为 WGS-84，不支持百度墨卡托或非高德分享短链；导航前请核对落点。</p><div className="form-row"><label>地点类型<select value={draft.category} onChange={e=>set('category',e.target.value)}>{categories.map(x=><option key={x}>{x}</option>)}</select></label><label>开放状态<select value={draft.status} onChange={e=>set('status',e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></label></div><fieldset><legend>已确认的设施</legend>{facilities.map(f=><label className="checkbox" key={f}><input type="checkbox" checked={draft.facilities.includes(f)} onChange={e=>set('facilities',e.target.checked?[...draft.facilities,f]:draft.facilities.filter(x=>x!==f))}/>{f}</label>)}</fieldset><div className="form-row"><label>实测限高（米，可不填）<input type="number" step="0.01" min="0.01" max="10" value={draft.heightLimit} onChange={e=>set('heightLimit',e.target.value)}/></label><label>核实日期（可不填）<input type="date" max={new Date().toISOString().slice(0,10)} value={draft.verifiedAt} onChange={e=>set('verifiedAt',e.target.value)}/></label></div><label>现场备注<textarea rows="3" maxLength={2000} value={draft.notes} onChange={e=>set('notes',e.target.value)} placeholder="入口路况、收费、夜间环境、是否允许过夜…"/></label>{error&&<p role="alert" className="warning">{error}</p>}<div className="form-actions"><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={resolving}><Check size={18}/>保存地点</button></div></form></section></div>
+ }}>{resolving?'正在向高德读取点位…':'预览链接坐标'}</button>{importError&&<p className="warning" role="alert">{importError}</p>}{preview&&<div><p>来源：{preview.source} · {preview.datum.toUpperCase()} · {preview.original.lat}, {preview.original.lng}</p>{preview.assumedDatum&&<p className="hint">按高德 GCJ-02 约定换算（分享格式未公开保证）。请核对原图钉：{preview.name||'无名称'}。</p>}<p>保存坐标（WGS-84）：{preview.lat.toFixed(6)}, {preview.lng.toFixed(6)}</p><button type="button" onClick={()=>{setDraft(d=>({...d,lat:preview.lat,lng:preview.lng,name:d.name||preview.name||''}));setSystem('wgs84');setPreview(null);setLink('');}}>填入表单</button></div>}<p className="hint">长链接仅在本机读取。Android 预览短链接时仅向高德请求跳转头，不上传备注或保存链接。填入后请核对并保存。</p></details>}<form onSubmit={e=>{e.preventDefault();setError('');try{onSave(validatePlace({...draft,...toWgs(draft.lat,draft.lng,system)}));}catch(err){setError(err.message);}}}><label>地点名称<input autoFocus required maxLength={80} value={draft.name} onChange={e=>set('name',e.target.value)} placeholder="例如：湖边停车场"/></label><label>输入坐标系<select disabled={resolving} value={system} onChange={e=>setSystem(e.target.value)}><option value="wgs84">GPS / WGS-84</option><option value="gcj02">高德 / 腾讯 (GCJ-02)</option><option value="bd09">百度经纬度 (BD-09)</option></select></label><div className="form-row"><label>纬度<input required disabled={resolving} type="number" step="any" min="-90" max="90" value={draft.lat} onChange={e=>set('lat',e.target.value)} placeholder="30.250000"/></label><label>经度<input required disabled={resolving} type="number" step="any" min="-180" max="180" value={draft.lng} onChange={e=>set('lng',e.target.value)} placeholder="120.150000"/></label></div><p className="hint">请选择与来源一致的坐标系。保存时近似转换为 WGS-84，不支持百度墨卡托或非高德分享短链；导航前请核对落点。</p><div className="form-row"><label>地点类型<select value={draft.category} onChange={e=>set('category',e.target.value)}>{categories.map(x=><option key={x}>{x}</option>)}</select></label><label>开放状态<select value={draft.status} onChange={e=>set('status',e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></label></div><fieldset><legend>已确认的设施</legend>{facilities.map(f=><label className="checkbox" key={f}><input type="checkbox" checked={draft.facilities.includes(f)} onChange={e=>set('facilities',e.target.checked?[...draft.facilities,f]:draft.facilities.filter(x=>x!==f))}/>{f}</label>)}</fieldset><div className="form-row"><label>实测限高（米，可不填）<input type="number" step="0.01" min="0.01" max="10" value={draft.heightLimit} onChange={e=>set('heightLimit',e.target.value)}/></label><label>核实日期（可不填）<input type="date" max={new Date().toISOString().slice(0,10)} value={draft.verifiedAt} onChange={e=>set('verifiedAt',e.target.value)}/></label></div><label>现场备注<textarea rows="3" maxLength={2000} value={draft.notes} onChange={e=>set('notes',e.target.value)} placeholder="入口路况、收费、夜间环境、是否允许过夜…"/></label>{(error||saveError)&&<p role="alert" className="warning">{error||saveError}</p>}<div className="form-actions"><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={resolving}><Check size={18}/>保存地点</button></div></form></section></div>
 }
 createRoot(document.getElementById('root')).render(<App/>);

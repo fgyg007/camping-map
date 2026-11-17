@@ -30,6 +30,17 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Verify mobile save, map marker and persistence in Chromium
+        shell: bash
+        run: |
+          tool_dir="$RUNNER_TEMP/camping-browser"
+          npm install --prefix "$tool_dir" --no-audit --no-fund --no-package-lock playwright@1.65.1
+          "$tool_dir/node_modules/.bin/playwright" install chromium
+          npm run dev -- --host 127.0.0.1 --port 5179 --strictPort > "$RUNNER_TEMP/camping-vite.log" 2>&1 &
+          app_pid=$!
+          trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+          for n in {1..20}; do curl -fs http://127.0.0.1:5179 > /dev/null && break; sleep 1; done
+          CAMPING_PLAYWRIGHT="$tool_dir/node_modules/playwright" node tests/save-home.smoke.cjs
       - run: npx cap sync android
       - name: Build test APK and check Android lint
         working-directory: android
