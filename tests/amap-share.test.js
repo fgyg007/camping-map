@@ -13,3 +13,9 @@ test('uses only the explicit destination and ignores tracking metadata',()=>{
 test('refuses lookalikes, ambiguous fields, bad coordinates and address-only redirects',()=>{
  for(const value of ['https://evil.test/?q=39,116,a','http://wb.amap.com/?q=39,116,a','https://wb.amap.com:8443/?q=39,116,a','https://wb.amap.com/a?q=39,116,a','https://wb.amap.com/?q=39,116,a&q=30,120,b','https://wb.amap.com/?q=39,116,a&coordinate=wgs84','https://wb.amap.com/?q=91,116,a','https://wb.amap.com/?q=Name','https://wb.amap.com/?q=39,116,a#b'])assert.throws(()=>parseAmapLocation(value));
 });
+
+test('imports documented-by-observation POI p fields without treating address as label',()=>{
+ const r=parseAmapLocation('https://wb.amap.com/?p=B0TEST1234,30.1234,114.5678,测试码头,测试地址,多段地址');
+ assert.equal(r.name,'测试码头');assert.deepEqual(r.original,{lat:30.1234,lng:114.5678});
+ for(const u of ['?p=bad,30,114,name,address','?p=B0TEST1234,30,114,,address','?p=B0TEST1234,30,114,name,address&q=30,114,name','?p=B0TEST1234,30,114,name'])assert.throws(()=>parseAmapLocation('https://wb.amap.com/'+u));
+});
