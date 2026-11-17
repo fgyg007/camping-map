@@ -2,6 +2,13 @@
 
 一个个人营地记录应用。React + Leaflet + Capacitor，Android 在 GitHub Actions 云端构建。
 
+## 产品方案与云端续接
+
+- [完整产品设计与技术架构方案（原文）](docs/product/original-proposal.md)
+- [Dot / 云端开发续接说明](docs/RESUME.md)
+
+原方案描述长期目标，当前实现与限制见下文；云端可直接从本仓库继续，无需访问 Mac 或 Notes。
+
 ## 已有功能
 
 - 营地新增、编辑、删除、收藏、搜索及分类筛选。
