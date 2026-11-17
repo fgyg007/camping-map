@@ -7,8 +7,9 @@ const assert=require('node:assert/strict');
  await c.addInitScript((baseline)=>{
   window.androidBridge={};
   window.Capacitor={PluginHeaders:[{name:'MapShare',methods:[
-   {name:'takePending',rtype:'promise'},{name:'resolveAmap',rtype:'promise'},{name:'addListener',rtype:'callback'}
-  ]}],nativeCallback(){},nativePromise(_plugin,method){
+   {name:'takePending',rtype:'promise'},{name:'openAmapRoute',rtype:'promise'},{name:'resolveAmap',rtype:'promise'},{name:'addListener',rtype:'callback'}
+  ]}],nativeCallback(){},nativePromise(_plugin,method,options){
+   if(method==='openAmapRoute'){window.amapRequests??=[];window.amapRequests.push(options);return Promise.resolve({target:window.amapRequests.length===1?'app':'web'});}
    if(method==='removeListener')return Promise.resolve({});
    if(method==='takePending'){if(sessionStorage.getItem('camping-mock-consumed'))return Promise.resolve({});sessionStorage.setItem('camping-mock-consumed','1');return Promise.resolve({text:'https://surl.amap.com/Synthetic1'});}
    if(method==='resolveAmap')return Promise.resolve({location:'https://wb.amap.com/?q=25,102,合成分享营地'});
@@ -42,6 +43,15 @@ const assert=require('node:assert/strict');
   await marker.waitFor({state:'attached'});
   await page.reload(); await card.waitFor({state:'visible'});
   await marker.waitFor({state:'attached'});
+  await card.click();
+  await page.getByRole('button',{name:'高德路线规划'}).click();
+  await page.waitForFunction(()=>window.amapRequests?.length===1);
+  const request=await page.evaluate(()=>window.amapRequests[0]);
+  assert.deepEqual(request,{lat:data.lat,lng:data.lng,gcjLat:request.gcjLat,gcjLng:request.gcjLng});
+  assert.ok(Math.abs(request.gcjLat-25)<1e-7);assert.ok(Math.abs(request.gcjLng-102)<1e-7);
+  await page.getByRole('button',{name:'高德路线规划'}).click();
+  await page.getByRole('status').filter({hasText:'已改用网页'}).waitFor();
+  await page.getByRole('button',{name:'关闭详情'}).click();
   await page.getByRole('button',{name:'添加地点',exact:true}).first().click();
   await page.getByRole('textbox',{name:'地点名称'}).fill('失败测试');
   await page.getByRole('spinbutton',{name:'纬度'}).fill('31');
