@@ -1,7 +1,7 @@
 name: Build Android APK
 on:
   push:
-    branches: [main]
+    branches: [main, 'feat/coordinate-navigation']
     paths-ignore: ['docs/**', '*.md']
   workflow_dispatch:
 permissions:
