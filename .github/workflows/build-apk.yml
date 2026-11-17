@@ -40,7 +40,8 @@ jobs:
           app_pid=$!
           trap 'kill "$app_pid" 2>/dev/null || true' EXIT
           for n in {1..20}; do curl -fs http://127.0.0.1:5179 > /dev/null && break; sleep 1; done
-          CAMPING_PLAYWRIGHT="$tool_dir/node_modules/playwright" node tests/save-home.smoke.cjs
+          mkdir -p artifacts
+          CAMPING_SCREENSHOT="$PWD/artifacts/mobile-list-smoke.png" CAMPING_PLAYWRIGHT="$tool_dir/node_modules/playwright" node tests/save-home.smoke.cjs
       - run: npx cap sync android
       - name: Build test APK and check Android lint
         working-directory: android
@@ -52,6 +53,11 @@ jobs:
           mkdir -p artifacts
           cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/camping-map-v0.1.0-debug.apk
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose artifacts/camping-map-v0.1.0-debug.apk > artifacts/signature-verification.txt
+          aapt="$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          "$aapt" dump resources artifacts/camping-map-v0.1.0-debug.apk > "$RUNNER_TEMP/camping-resources.txt"
+          grep -E '(mipmap/ic_launcher|drawable/ic_launcher_monochrome)' "$RUNNER_TEMP/camping-resources.txt" > artifacts/launcher-resources.txt
+          grep -q 'mipmap/ic_launcher_round' artifacts/launcher-resources.txt
+          grep -q 'drawable/ic_launcher_monochrome' artifacts/launcher-resources.txt
           cd artifacts
           sha256sum camping-map-v0.1.0-debug.apk > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4

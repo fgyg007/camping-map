@@ -71,3 +71,5 @@ npm run build
 ### Android 分享试用
 
 高德短链接与系统 text/plain 分享接收已实现，先用合成无名点真机验收。微信闭环仍未打通：不将复制短码、手填或桌面重标视作一键导入。
+
+Android 已改为列表首页、移除嵌入的在线底图；网页地图可手动打开。保留高德与 Google 外部路线。应用图标资源由 `tools/generate-launcher-icons.py` 生成旧版位图，系统自适应图标采用 108dp 矢量层。
