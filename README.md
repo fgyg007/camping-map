@@ -22,6 +22,8 @@ npm run dev -- --port 5173
 npm run build
 ```
 
+首个 APK 已构建通过：[下载页面](https://github.com/fgyg007/camping-map/actions/runs/44044484379)（页面底部 Artifacts）。
+
 ## 在 GitHub 编译和下载 APK
 
 1. 打开仓库 **Actions → Build Android APK**。
