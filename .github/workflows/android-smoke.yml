@@ -1,0 +1,52 @@
+name: Android installed APK smoke
+on:
+  push:
+    branches: ['feat/coordinate-navigation']
+    paths: ['.github/workflows/android-smoke.yml','tests/android-installed.smoke.cjs']
+permissions:
+  actions: read
+  contents: read
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check hardware acceleration
+        run: |
+          test -r /dev/kvm && test -w /dev/kvm || { echo "::error::Hosted runner does not grant access to /dev/kvm"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools emulator system-images;android-35;google_apis;x86_64'
+          log-accepted-android-sdk-licenses: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: camping-map-android-debug
+          run-id: 44069742249
+          github-token: ${{ github.token }}
+          path: smoke-apk
+      - name: Verify artifact and exercise an installed APK
+        shell: bash
+        run: |
+          (cd smoke-apk && sha256sum --check SHA256SUMS.txt)
+          emulator -accel-check
+          echo no | avdmanager create avd --name camping-smoke --package 'system-images;android-35;google_apis;x86_64'
+          emulator -avd camping-smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/camping-emulator.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          timeout 180 adb wait-for-device
+          for n in {1..90}; do
+            [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ] && break
+            sleep 2
+          done
+          [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = 1 ]
+          adb shell wm size 1080x2380
+          adb shell wm density 420
+          adb shell input keyevent 82
+          adb install smoke-apk/camping-map-v0.1.0-debug.apk
+          tool_dir="$RUNNER_TEMP/camping-android-tool"
+          npm install --prefix "$tool_dir" --no-audit --no-fund --no-package-lock playwright@1.65.1
+          CAMPING_PLAYWRIGHT="$tool_dir/node_modules/playwright" node tests/android-installed.smoke.cjs
