@@ -30,11 +30,14 @@ jobs:
         run: |
           (cd smoke-apk && sha256sum --check SHA256SUMS.txt)
           echo no | avdmanager create avd --name camping-smoke --package 'system-images;android-35;google_apis;x86_64'
-          emulator -accel off -avd camping-smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/camping-emulator.log" 2>&1 &
+          emulator_bin="$ANDROID_HOME/emulator/emulator"
+          test -x "$emulator_bin" || { echo "::error::Official SDK emulator binary not installed"; exit 1; }
+          export PATH="$ANDROID_HOME/emulator:$PATH"
+          "$emulator_bin" -accel off -avd camping-smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/camping-emulator.log" 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
-          if ! timeout 270 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do sleep 3; done'; then
-            echo "::error::Software-mode emulator did not complete boot within 270 seconds."
+          if ! timeout 270 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do kill -0 "$1" 2>/dev/null || exit 3; sleep 3; done' _ "$pid"; then
+            echo "::error::Software-mode emulator exited or did not boot within 270 seconds."
             tail -40 "$RUNNER_TEMP/camping-emulator.log"
             exit 1
           fi
