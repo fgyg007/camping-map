@@ -24,3 +24,9 @@
 - 使用合成坐标测试 WGS-84 / GCJ-02 往返、BD-09 经纬度反算、异常输入和高德 URL 经度在前。
 - 旧备份保持 v1；坐标转换只在地点编辑器保存时进行，不重解读备份，底图仍为 OSM。
 - 待真机：高德路线规划点位、浏览器回退、WebView 到原生地图跳转；本地换算不是测绘保证。
+
+## 地图长链接预览
+
+- 只解析白名单 URL，不访问来源、不保存链接原文；预览原坐标及 WGS-84 后，用户填入表单、命名并保存。
+- 支持[高德标点](https://lbs.amap.com/api/uri-api/guide/mobile-web/point) position / [路线](https://lbs.amap.com/api/uri-api/guide/travel/route) to（明确 coordinate），[百度 Web 标点](https://lbsyun.baidu.com/docs/webapi?title=mapadjustment/uri/web) location（明确 coord_type，仅经纬度）以及 [Google Maps URL](https://developers.google.com/maps/documentation/urls/get-started) 的 api=1、纯经纬度 destination（不允许 place ID，且近似大陆范围内拒绝自动换算）。
+- 自动测试覆盖支持格式、伪造域名、重复参数、视图中心、短链及不明确坐标系。真机粘贴与保存、原生分享仍未验收。
