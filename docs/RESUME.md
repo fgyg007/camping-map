@@ -63,3 +63,7 @@ npm run build
 ## 给 Dot 的起始指令
 
 > 请接续私有仓库 fgyg007/camping-map。先读取 AGENTS.md、README.md、docs/RESUME.md、docs/QA.md 和完整方案 docs/product/original-proposal.md，检查当前分支与工作区，再运行 npm ci、npm test、npm run build。Android 已选 GitHub Actions 云端编译，不安装本机 Android 工具链。当前是 v0.1.0 基础版，请对照完整方案推进后续实现，优先国内地图/导航、坐标处理与分享导入，并完成受影响的测试和云端构建；真机验收单独记录。云端没有 Notes 或 SSD 时按仓库说明继续，不把演示地点当作真实营地。
+
+### 微信位置引用候选
+
+已有一例用户确认腾讯地图小程序短链接能在微信回到分享点位，见 QA。可另做「位置引用」：仅本机保存不透明引用、标题和备注，允许复制回微信；未提供坐标时不生成地图点。暂不宣称能够提取坐标、跨设备复开或保证有效期。

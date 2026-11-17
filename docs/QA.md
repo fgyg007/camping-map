@@ -30,3 +30,8 @@
 - 只解析白名单 URL，不访问来源、不保存链接原文；预览原坐标及 WGS-84 后，用户填入表单、命名并保存。
 - 支持[高德标点](https://lbs.amap.com/api/uri-api/guide/mobile-web/point) position / [路线](https://lbs.amap.com/api/uri-api/guide/travel/route) to（明确 coordinate），[百度 Web 标点](https://lbsyun.baidu.com/docs/webapi?title=mapadjustment/uri/web) location（明确 coord_type，仅经纬度）以及 [Google Maps URL](https://developers.google.com/maps/documentation/urls/get-started) 的 api=1、纯经纬度 destination（不允许 place ID，且近似大陆范围内拒绝自动换算）。
 - 自动测试覆盖支持格式、伪造域名、重复参数、视图中心、短链及不明确坐标系。真机粘贴与保存、原生分享仍未验收。
+
+## 微信位置来源复开
+
+- 用户实测一例：微信原位置 → 收藏 → 更多 → 腾讯地图 → 分享，所得小程序短链接在微信中可回到分享点位。未对比原始数值坐标，未验证跨设备、时效或导航落点。
+- 后续真机测试用自选无名样例：比对原位置卡片与小程序复开后的图钉；区分路线吸附终点、文字地址及截图人工估点。复开不等于坐标导出。本仓库不保存用户短链接原文。
