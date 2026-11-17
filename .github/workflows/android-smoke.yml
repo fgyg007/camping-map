@@ -29,10 +29,14 @@ jobs:
         shell: bash
         run: |
           (cd smoke-apk && sha256sum --check SHA256SUMS.txt)
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/camping-avds"
+          mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd --name camping-smoke --package 'system-images;android-35;google_apis;x86_64'
           emulator_bin="$ANDROID_HOME/emulator/emulator"
           test -x "$emulator_bin" || { echo "::error::Official SDK emulator binary not installed"; exit 1; }
+          test -f "$ANDROID_AVD_HOME/camping-smoke.ini" || { echo "::error::AVD manager did not create camping-smoke.ini"; exit 1; }
           export PATH="$ANDROID_HOME/emulator:$PATH"
+          "$emulator_bin" -list-avds | grep -Fx camping-smoke
           "$emulator_bin" -accel off -avd camping-smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/camping-emulator.log" 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
