@@ -45,6 +45,10 @@ test('extracts a single provider link from share text and removes short-link tra
  assert.equal(externalMapShortFromText('https://j.map.baidu.com.evil/Example'),null);
  assert.equal(mapLinkFromText('POI https://j.map.baidu.com/Example'), 'https://j.map.baidu.com/Example');
  assert.equal(mapLinkFromText('https://www.google.com/url?q=https%3A%2F%2Fnot-a-map.invalid'),null);
+ assert.equal(mapLinkFromText('[百度地图](https://j.map.baidu.com/4f/Example)'), 'https://j.map.baidu.com/4f/Example');
+ assert.equal(externalMapShortFromText('[百度地图](https://j.map.baidu.com/4f/Example)'), 'https://j.map.baidu.com/4f/Example');
+ assert.equal(mapLinkFromText('[地图](https://www.google.com/maps/place/Test+(East))'), 'https://www.google.com/maps/place/Test+(East)');
+ assert.equal(mapLinkFromText('[地图](https://j.map.baidu.com/Example) [另一个](https://maps.app.goo.gl/Other)'),null);
 });
 
 test('accepts documented Baidu marker coordinates and does not fabricate UID-only coordinates',async()=>{
@@ -56,7 +60,9 @@ test('accepts documented Baidu marker coordinates and does not fabricate UID-onl
  const wgs=parseExternalMapLocation('https://api.map.baidu.com/marker?location=39,116&coord_type=wgs84',short);
  assert.deepEqual(wgs.original,{lat:39,lng:116});
  assert.equal(wgs.lat,39);
- assert.throws(()=>parseExternalMapLocation('https://map.baidu.com/?s=inf%26uid%3Dabcdef',short));
+ const uidOnly='https://map.baidu.com/?newmap=1&s=inf%26uid%3DExamplePoiId&sharecallbackflag=poiDetailPage';
+ assert.throws(()=>parseExternalMapLocation(uidOnly,short),/只返回地点编号/);
+ assert.throws(()=>parseMapLink(uidOnly),/只返回地点编号/);
  assert.throws(()=>parseExternalMapLocation('https://www.google.com/maps/search/?api=1&query=-33,151',short));
  assert.throws(()=>parseMapLink('https://api.map.baidu.com/marker?location=39,116&coord_type=wgs84&coord_type=gcj02'));
 });

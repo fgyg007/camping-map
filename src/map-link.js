@@ -18,8 +18,19 @@ function strictUrl(value){
 
 function singleLink(text){
  if(typeof text!=='string'||text.length>CAPPED_TEXT)return null;
- const tokens=text.match(/https?:\/\/[^\s<>"，。！？；、）》」】]+/giu)??[];
- const [only,...rest]=[...new Set(tokens)];
+ const tokens=text.match(/https?:\/\/[^\s<>"\[\]，。！？；、）》」】]+/giu)??[];
+ const links=tokens.map(token=>{
+  // A literal Markdown link may end in a closing delimiter; don't strip
+  // balanced parentheses that actually appear in a Google place name.
+  let balance=0;
+  for(const char of token){
+   if(char==='(')balance++;
+   if(char===')')balance--;
+  }
+  while(balance<0&&token.endsWith(')')){token=token.slice(0,-1);balance++;}
+  return token;
+ });
+ const [only,...rest]=[...new Set(links)];
  if(!only||rest.length)return null;
  try{return strictUrl(only);}catch{return null;}
 }
@@ -62,6 +73,12 @@ function cleanName(value){
  return name&&name.length<=80&&!/[\x00-\x1f\x7f]/u.test(name)?name:undefined;
 }
 
+function isBaiduPoiReference(url){
+ const s=url.searchParams.getAll('s');
+ return url.hostname==='map.baidu.com'&&['/','/mobile/'].includes(url.pathname)&&
+  s.length===1&&/^inf&uid=[A-Za-z0-9_-]{1,128}$/u.test(s[0]);
+}
+
 function googlePlace(url){
  // In /maps/place/, an exact pin pair is distinct from the @lat,lng camera.
  // This shape is a compatibility path, not a documented Maps URL API.
@@ -82,6 +99,8 @@ function googlePlace(url){
 export function parseMapLink(input){
  const url=strictUrl(typeof input==='string'?input.trim():input);
  if(SHORT_HOSTS.has(url.hostname))throw Error('地图短链接需要在安卓版联网展开，或粘贴包含坐标的完整链接。');
+ if(isBaiduPoiReference(url))
+  throw Error('这条百度地图链接只返回地点编号，未提供可确认的经纬度。请打开原地图核对点位，再手动录入坐标。');
  const get=(k)=>{if(url.searchParams.getAll(k).length>1)throw rejected();return url.searchParams.get(k);};
  let pair,datum,source,order,name;
  if(url.hostname==='uri.amap.com'&&['/marker','/navigation'].includes(url.pathname)){
@@ -118,6 +137,6 @@ export function parseExternalMapLocation(location,originalShortUrl){
  const target=strictUrl(location);
  if(!original)throw rejected();
  const baidu=original.startsWith('https://j.map.baidu.com/');
- if(baidu ? target.hostname!=='api.map.baidu.com' : !GOOGLE_HOSTS.has(target.hostname))throw rejected();
+ if(baidu ? !['api.map.baidu.com','map.baidu.com'].includes(target.hostname) : !GOOGLE_HOSTS.has(target.hostname))throw rejected();
  return parseMapLink(location);
 }
