@@ -7,3 +7,25 @@
 
 /* On narrow screens show saved locations before a possibly unavailable online basemap. */
 @media(max-width:650px){.workspace{flex-direction:column}}
+
+.header-actions{display:flex;align-items:center;gap:10px;flex:none}
+.header-actions>button{white-space:nowrap}
+.header-actions>button:not(.primary){background:#f0f1e9;border:1px solid #e2e4da;border-radius:9px;padding:12px 15px}
+.scenery img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.scenery:has(img) span{position:absolute;bottom:8px;background:#163e2e;color:white;border-radius:4px;padding:3px 5px}
+.scenery:has(img):before{display:none}
+.editor .photo-editor{display:block;border:1px solid #e4e8dc;border-radius:8px;padding:9px 12px 12px;min-width:0}
+.photo-editor legend{display:inline-flex;align-items:center;gap:5px;padding:0 4px;margin:0}
+.photo-editor>button,.photo-viewer button{background:#edf0e7;border-radius:7px;padding:8px 11px}
+.photo-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:0 0 9px}
+.photo-item,.photo-open{display:block;position:relative;border-radius:7px;overflow:hidden;background:#edf0e7;aspect-ratio:1.27;padding:0}
+.photo-item img,.photo-open img{display:block;width:100%;height:100%;object-fit:cover}
+.photo-item button{position:absolute;right:3px;top:3px;color:#273e32;background:#f8faf3;width:26px;height:26px;padding:0;border-radius:100%}
+.campsite-gallery h3{font-size:13px;margin:0 0 7px}
+.photo-viewer{display:flex;flex-direction:column;align-items:center;gap:8px;background:#eef0e8;padding:8px;border-radius:8px}
+.photo-viewer img{display:block;width:100%;max-height:50vh;object-fit:contain}
+.vehicle-dialog h2{display:flex;align-items:center;gap:7px}
+.vehicle-measures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.vehicle-measures input{min-width:0}
+@media(max-width:650px){.header-actions{gap:5px;flex-direction:column-reverse;align-items:stretch}.header-actions>button:not(.primary){padding:7px 6px;font-size:10px}.header-actions>button:not(.primary) svg{width:14px;height:14px}}
+@media(max-width:380px){header h1{white-space:normal;font-size:clamp(18px,5.4vw,21px)}}

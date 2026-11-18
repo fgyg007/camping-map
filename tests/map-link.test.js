@@ -32,3 +32,53 @@ test('rejects misleading, ambiguous, short and unsupported URLs',()=>{
  'https://maps.app.goo.gl/id','https://j.map.baidu.com/id','https://surl.amap.com/id'
  ])assert.throws(()=>parseMapLink(url),undefined,url);
 });
+
+test('extracts a single provider link from share text and removes short-link tracking',async()=>{
+ const {mapLinkFromText,externalMapShortFromText}=await import('../src/map-link.js');
+ assert.equal(externalMapShortFromText('地点：https://maps.app.goo.gl/Abc17?g_st=ic。'), 'https://maps.app.goo.gl/Abc17');
+ assert.equal(externalMapShortFromText('百度：http://j.map.baidu.com/9a/Example。'), 'https://j.map.baidu.com/9a/Example');
+ assert.equal(externalMapShortFromText('https://goo.gl/maps/Example'), 'https://goo.gl/maps/Example');
+ assert.equal(externalMapShortFromText('https://goo.gl/Example'),null);
+ assert.equal(externalMapShortFromText('https://j.map.baidu.com/9a/Example https://not-a-map.invalid/'),null);
+ assert.equal(externalMapShortFromText('https://j.map.baidu.com:443/Example'),null);
+ assert.equal(externalMapShortFromText('https://@j.map.baidu.com/Example'),null);
+ assert.equal(externalMapShortFromText('https://j.map.baidu.com.evil/Example'),null);
+ assert.equal(mapLinkFromText('POI https://j.map.baidu.com/Example'), 'https://j.map.baidu.com/Example');
+ assert.equal(mapLinkFromText('https://www.google.com/url?q=https%3A%2F%2Fnot-a-map.invalid'),null);
+});
+
+test('accepts documented Baidu marker coordinates and does not fabricate UID-only coordinates',async()=>{
+ const {parseExternalMapLocation}=await import('../src/map-link.js');
+ const short='https://j.map.baidu.com/4f/Example';
+ const ordinary=parseMapLink('https://api.map.baidu.com/marker?location=39,116&title=test');
+ assert.equal(ordinary.datum,'bd09');
+ assert.equal(ordinary.name,'test');
+ const wgs=parseExternalMapLocation('https://api.map.baidu.com/marker?location=39,116&coord_type=wgs84',short);
+ assert.deepEqual(wgs.original,{lat:39,lng:116});
+ assert.equal(wgs.lat,39);
+ assert.throws(()=>parseExternalMapLocation('https://map.baidu.com/?s=inf%26uid%3Dabcdef',short));
+ assert.throws(()=>parseExternalMapLocation('https://www.google.com/maps/search/?api=1&query=-33,151',short));
+ assert.throws(()=>parseMapLink('https://api.map.baidu.com/marker?location=39,116&coord_type=wgs84&coord_type=gcj02'));
+});
+
+test('parses one Google place pin, never the camera, route waypoints, or ambiguous place records',async()=>{
+ const {parseExternalMapLocation}=await import('../src/map-link.js');
+ const short='https://maps.app.goo.gl/Example';
+ const place='https://www.google.com/maps/place/Test+Park/@-33.7,151.0,17z/data=!4m6!3m5!1s0x0:0x1!8m2!3d-33.8!4d151.2!16s%2Fg%2Fexample';
+ const pin=parseExternalMapLocation(place,short);
+ assert.equal(pin.lat,-33.8);
+ assert.equal(pin.lng,151.2);
+ assert.equal(pin.name,'Test Park');
+ assert.equal(parseMapLink('https://google.com/maps/search/?api=1&query=-33,151').lng,151);
+ for(const url of [
+  'https://www.google.com/maps/place/Test/@-33.7,151.0,17z',
+  'https://www.google.com/maps/place/Test/@-33.7,151.0,17z/data=!1s0x1:0x2',
+  place+'!8m2!3d-33.7!4d151.1',
+  place+'!1e1',
+  place+'?layer=c',
+  'https://google.com/maps/dir/Test/Test/@-33,151,12z/data=!1m5!1m1!1sabc!8m2!3d-33!4d151',
+  'https://google.com/maps/search/?api=1&query=-33,151&query_place_id=other',
+  'https://google.com/maps/search/?api=1&query=39,116',
+  'https://google.com/maps/search/?api=1&query=-33,151&query=-32,150',
+ ])assert.throws(()=>parseExternalMapLocation(url,short),undefined,url);
+});

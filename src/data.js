@@ -1,3 +1,5 @@
+import {validatePhotos} from './photos.js';
+import {validateVehicle} from './vehicle.js';
 export const categories = ['湖畔','山野','海边','服务区','其他'];
 export const statuses = ['待核实','开放','关闭'];
 export const facilities = ['厕所','水源','供电','垃圾点'];
@@ -22,13 +24,17 @@ export function validatePlace(p) {
  if(p.notes!=null && (typeof p.notes!=='string'||p.notes.length>2000)) throw Error('备注最多 2000 字');
  if(p.heightLimit!=='' && p.heightLimit!=null && (!Number.isFinite(Number(p.heightLimit))||Number(p.heightLimit)<=0||Number(p.heightLimit)>10)) throw Error('限高应大于 0 且不超过 10 米');
  if(p.verifiedAt && !/^\d{4}-\d{2}-\d{2}$/.test(p.verifiedAt)) throw Error('核实日期格式无效');
- return {id:typeof p.id==='string'?p.id:makePlaceId(),name:p.name.trim(),lat:Number(p.lat),lng:Number(p.lng),category:p.category,status:p.status,facilities:[...p.facilities],notes:p.notes||'',heightLimit:p.heightLimit ? Number(p.heightLimit):'',verifiedAt:p.verifiedAt||'',favorite:p.favorite===true,demo:p.demo===true};
+ const photos=validatePhotos(p.photos);
+ return {id:typeof p.id==='string'?p.id:makePlaceId(),name:p.name.trim(),lat:Number(p.lat),lng:Number(p.lng),category:p.category,status:p.status,facilities:[...p.facilities],notes:p.notes||'',heightLimit:p.heightLimit ? Number(p.heightLimit):'',verifiedAt:p.verifiedAt||'',favorite:p.favorite===true,demo:p.demo===true,...(photos.length?{photos}:{})};
 }
-export function parseBackup(text) {
+export function parseBackupDocument(text) {
  const data=JSON.parse(text);
  if(data.version!==1||!Array.isArray(data.places)||data.places.length>5000) throw Error('备份格式不正确或超过 5000 个地点');
  const places=data.places.map(validatePlace);
  if(new Set(places.map(p=>p.id)).size!==places.length) throw Error('备份中存在重复 ID');
- return places;
+ return {places,vehicle:validateVehicle(data.vehicle)};
 }
+export function parseBackup(text){return parseBackupDocument(text).places;}
 export function navigationUrl(p) {return 'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',destination:`${p.lat},${p.lng}`,travelmode:'driving'});}
+
+export function baiduMarkerUrl(p){return 'https://api.map.baidu.com/marker?'+new URLSearchParams({location:`${p.lat},${p.lng}`,coord_type:'wgs84',title:'野泊营地',content:'已保存的营地坐标',output:'html',src:'webapp.jlmac.campingmap'});}

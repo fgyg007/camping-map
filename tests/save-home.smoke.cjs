@@ -1,18 +1,22 @@
 const {chromium,devices}=require(process.env.CAMPING_PLAYWRIGHT || 'playwright');
 const assert=require('node:assert/strict');
 (async()=>{
- const b=await chromium.launch({headless:true,args:['--no-sandbox']});
+ const b=await chromium.launch({headless:true,args:['--no-sandbox'],...(process.env.CAMPING_CHROMIUM?{executablePath:process.env.CAMPING_CHROMIUM}:{})});
  try{
  const c=await b.newContext({...devices['Pixel 7']});
  await c.addInitScript((baseline)=>{
   window.androidBridge={};
   window.Capacitor={PluginHeaders:[{name:'MapShare',methods:[
-   {name:'takePending',rtype:'promise'},{name:'openAmapRoute',rtype:'promise'},{name:'resolveAmap',rtype:'promise'},{name:'addListener',rtype:'callback'}
+   {name:'takePending',rtype:'promise'},{name:'openAmapRoute',rtype:'promise'},{name:'resolveAmap',rtype:'promise'},{name:'resolveExternalMapLink',rtype:'promise'},{name:'addListener',rtype:'callback'}
   ]}],nativeCallback(){},nativePromise(_plugin,method,options){
    if(method==='openAmapRoute'){window.amapRequests??=[];window.amapRequests.push(options);return Promise.resolve({target:window.amapRequests.length===1?'app':'web'});}
    if(method==='removeListener')return Promise.resolve({});
    if(method==='takePending'){if(sessionStorage.getItem('camping-mock-consumed'))return Promise.resolve({});sessionStorage.setItem('camping-mock-consumed','1');return Promise.resolve({text:'https://surl.amap.com/Synthetic1'});}
    if(method==='resolveAmap')return Promise.resolve({location:'https://wb.amap.com/?q=25,102,合成分享营地'});
+   if(method==='resolveExternalMapLink'){
+    window.shortRequests??=[];window.shortRequests.push(options.url);
+    return Promise.resolve({location:options.url.includes('goo.gl')?'https://www.google.com/maps/search/?api=1&query=-33.2,151.1':'https://map.baidu.com/?s=inf%26uid%3Dsynthetic'});
+   }
    throw Error('Unexpected simulated bridge method: '+method);
   }};
   if(!baseline)Object.defineProperty(Crypto.prototype,'randomUUID',{value:undefined,configurable:true});
@@ -55,6 +59,18 @@ const assert=require('node:assert/strict');
   await page.getByRole('status').filter({hasText:'已改用网页'}).waitFor();
   await page.getByRole('button',{name:'关闭详情'}).click();
   await page.getByRole('button',{name:'添加地点',exact:true}).first().click();
+  await page.getByText('从地图链接导入',{exact:true}).click();
+  const shareLink=page.getByLabel('地图分享链接');
+  await shareLink.fill('https://maps.app.goo.gl/TestPin?g_st=ic');
+  await page.getByRole('button',{name:'预览链接坐标'}).click();
+  await page.getByText(/来源：Google/).waitFor();
+  assert.deepEqual(await page.evaluate(()=>window.shortRequests),['https://maps.app.goo.gl/TestPin']);
+  await shareLink.fill('https://j.map.baidu.com/TestPoi');
+  await page.getByRole('button',{name:'预览链接坐标'}).click();
+  await page.getByRole('link',{name:'打开原地图链接'}).waitFor();
+  assert.equal(await page.getByLabel('纬度',{exact:true}).inputValue(),'');
+  await page.getByRole('button',{name:'关闭表单'}).click();
+  await page.getByRole('button',{name:'添加地点',exact:true}).first().click();
   await page.getByRole('textbox',{name:'地点名称'}).fill('失败测试');
   await page.getByRole('spinbutton',{name:'纬度'}).fill('31');
   await page.getByRole('spinbutton',{name:'经度'}).fill('115');
@@ -78,6 +94,8 @@ const assert=require('node:assert/strict');
   assert.equal(await web.locator('.map-wrap').count(),0);
   await web.locator('.cards .card').first().waitFor({state:'visible'});
   console.log('Web map is opt-in and returns to list if tiles fail.');
+  const preview=require('./trial-features.smoke.cjs');
+  await preview(b,devices['Pixel 7']);
  }
  assert.deepEqual(errs,[]);
  } finally {await b.close();}

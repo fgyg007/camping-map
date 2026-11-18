@@ -88,6 +88,20 @@ public class MapSharePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void resolveExternalMapLink(PluginCall call) {
+        try {
+            String location = ExternalMapRedirects.resolve(call.getString("url"), ExternalMapRedirects::readLocation);
+            JSObject result = new JSObject();
+            result.put("location", location);
+            call.resolve(result);
+        } catch (IllegalArgumentException ignored) {
+            call.reject("invalid_external_map_link");
+        } catch (Exception ignored) {
+            call.reject("external_map_location_unavailable");
+        }
+    }
+
+    @PluginMethod
     public void resolveAmap(PluginCall call) {
         String link = call.getString("url");
         if (link == null || !SHORT.matcher(link).matches()) {
