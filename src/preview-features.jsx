@@ -50,11 +50,11 @@ export function VehicleEditor({vehicle,onClose,onSave}){
   <button className="close" aria-label="关闭车辆" onClick={onClose}><X/></button><span className="eyebrow">MY VEHICLE</span><h2><Car size={22}/> 我的车辆</h2>
   <p>选择常见车型带出原厂参考尺寸，找不到就直接填写。加装件请按实测调整。</p>
   <form onSubmit={e=>{e.preventDefault();setIssue('');try{if(!onSave(validateVehicle({...form,brand})))setIssue('未保存车辆，请检查存储空间。');}catch(err){setIssue(err.message);}}}>
-   <label>选择品牌<select value={brand} onChange={e=>{
+   <label>选择品牌<select aria-label="选择品牌" value={brand} onChange={e=>{
     setBrand(e.target.value);
     setForm(current=>({...current,catalogId:''}));
    }}><option value="">其他品牌 / 不选品牌（手动录入）</option>{VEHICLE_BRANDS.map(value=><option key={value} value={value}>{value}</option>)}</select></label>
-   <label>选择车型<select disabled={!brand||!choices.length} value={preset?.id||''} onChange={e=>{
+   <label>选择车型<select aria-label="选择车型" disabled={!brand||!choices.length} value={preset?.id||''} onChange={e=>{
     const p=choices.find(v=>v.id===e.target.value);
     setForm(current=>p?{catalogId:p.id,model:p.model+' '+p.trim,lengthMm:p.lengthMm,widthMm:p.widthMm,heightMm:p.heightMm}:{...current,catalogId:''});
    }}><option value="">{!brand?'请先选择品牌':choices.length?'请选择车型，或直接手填':'这个品牌暂无预设，请手动填写'}</option>{choices.map(v=><option value={v.id} key={v.id}>{v.model} · {v.trim}</option>)}</select></label>

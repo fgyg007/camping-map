@@ -11,8 +11,8 @@ module.exports=async function trialFeatures(browser,device){
   await page.goto(origin);
   await page.getByRole('button',{name:'我的车辆'}).click();
   const vehicle=page.getByRole('dialog',{name:'我的车辆'});
-  const brand=vehicle.getByLabel('选择品牌');
-  const catalog=vehicle.getByLabel('选择车型');
+  const brand=vehicle.getByLabel('选择品牌',{exact:true});
+  const catalog=vehicle.getByLabel('选择车型',{exact:true});
   assert.equal(await catalog.isEnabled(),false);
   await brand.selectOption('理想');
   assert.equal(await catalog.locator('option[value="li-l6-2024"]').count(),1);
