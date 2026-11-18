@@ -38,3 +38,11 @@ export function parseBackup(text){return parseBackupDocument(text).places;}
 export function navigationUrl(p) {return 'https://www.google.com/maps/dir/?'+new URLSearchParams({api:'1',destination:`${p.lat},${p.lng}`,travelmode:'driving'});}
 
 export function baiduMarkerUrl(p){return 'https://api.map.baidu.com/marker?'+new URLSearchParams({location:`${p.lat},${p.lng}`,coord_type:'wgs84',title:'野泊营地',content:'已保存的营地坐标',output:'html',src:'webapp.jlmac.campingmap'});}
+
+export function baiduCandidateMarkerUrl({lat,lng}){
+ return 'https://api.map.baidu.com/marker?'+new URLSearchParams({
+  location:`${lat.toFixed(6)},${lng.toFixed(6)}`,
+  coord_type:'bd09ll',title:'野泊待核对候选点',content:'来自分享链接的地图画面中心',
+  output:'html',src:'webapp.jlmac.campingmap'
+ });
+}

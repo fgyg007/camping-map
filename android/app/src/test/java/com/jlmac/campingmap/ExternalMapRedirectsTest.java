@@ -21,6 +21,17 @@ public class ExternalMapRedirectsTest {
         assertEquals(Arrays.asList(url), requests);
     }
 
+    @Test public void desktopBaiduRedirectIsReturnedAsDataAndNeverFetched() throws Exception {
+        List<String> requests = new ArrayList<>();
+        String url = "https://j.map.baidu.com/4f/Example";
+        String expanded = "https://map.baidu.com/poi/Test/@12958175,4825923,19z?uid=SyntheticExample";
+        assertEquals(expanded, ExternalMapRedirects.resolve(url, uri -> {
+            requests.add(uri.toString());
+            return expanded;
+        }));
+        assertEquals(Arrays.asList(url), requests);
+    }
+
     @Test public void allowsOneSameProviderHopWithoutTracking() throws Exception {
         List<String> requests = new ArrayList<>();
         String url = "https://goo.gl/maps/Example";

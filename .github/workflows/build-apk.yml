@@ -43,11 +43,11 @@ jobs:
           mkdir -p artifacts
           CAMPING_SCREENSHOT="$PWD/artifacts/mobile-list-smoke.png" CAMPING_PLAYWRIGHT="$tool_dir/node_modules/playwright" node tests/save-home.smoke.cjs
       - run: npx cap sync android
-      - name: Build test APK and check Android lint
+      - name: Build test APK and run Android checks
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug lintDebug --no-daemon
+          ./gradlew assembleDebug lintDebug testDebugUnitTest --no-daemon
       - name: Collect verified APK
         run: |
           mkdir -p artifacts

@@ -88,3 +88,52 @@ test('parses one Google place pin, never the camera, route waypoints, or ambiguo
   'https://google.com/maps/search/?api=1&query=-33,151&query=-32,150',
  ])assert.throws(()=>parseExternalMapLocation(url,short),undefined,url);
 });
+
+test('Baidu desktop POI link yields confirmation-only candidate using published BD09MC example',async()=>{
+ const {mapLinkFromText,parseExternalMapLocation,isBaiduDesktopPoiLink}=await import('../src/map-link.js');
+ const {baiduCandidateMarkerUrl}=await import('../src/data.js');
+ // Public Baidu projection documentation uses these rounded Tiananmen values.
+ // UID and metadata are entirely synthetic.
+ const original='https://map.baidu.com/poi/%E5%A4%A9%E5%AE%89%E9%97%A8/@12958175,4825923,19z?uid=SyntheticExample&foo=fixture';
+ const escaped=original.replaceAll('&',String.fromCharCode(92)+'&');
+ const markdown='['+escaped+']('+escaped+')';
+ assert.equal(mapLinkFromText(markdown),original);
+ assert.equal(isBaiduDesktopPoiLink(markdown),true);
+ const preview=parseMapLink(mapLinkFromText(markdown));
+ assert.equal(preview.name,'天安门');
+ assert.equal(preview.requiresConfirmation,true);
+ assert.equal(preview.verificationUrl,original);
+ assert.equal(preview.datum,'bd09');
+ assert.ok(Math.abs(preview.original.lat-39.915)<1e-5);
+ assert.ok(Math.abs(preview.original.lng-116.404)<1e-5);
+ assert.ok(Math.abs(preview.lat-39.9075)<.001);
+ assert.ok(Math.abs(preview.lng-116.3912)<.001);
+ assert.deepEqual(parseExternalMapLocation(original,'https://j.map.baidu.com/1/Example'),preview);
+ const compare=new URL(baiduCandidateMarkerUrl(preview.original));
+ assert.equal(compare.origin,'https://api.map.baidu.com');
+ assert.equal(compare.searchParams.get('coord_type'),'bd09ll');
+ assert.equal(compare.searchParams.get('location'),'39.914995,116.404000');
+ assert.ok(!compare.href.includes('SyntheticExample'));
+});
+
+test('Baidu candidate refuses malformed POI paths, projected overflow, missing UID, non-coordinates and unsafe hosts',async()=>{
+ const {mapLinkFromText}=await import('../src/map-link.js');
+ const good='https://map.baidu.com/poi/Test/@12958175,4825923,19z?uid=Synthetic';
+ for(const bad of [
+  good.replace('map.baidu.com','map.baidu.com.evil.invalid'),
+  good.replace('map.baidu.com','foo@map.baidu.com'),
+  good.replace('map.baidu.com','map.baidu.com:443'),
+  good+'#fragment',
+  good.replace('/poi/Test/','/search/Test/'),
+  good.replace('/Test/','/A/B/'),
+  good.replace('12958175','12958175e0'),
+  good.replace('12958175','20037724000'),
+  good.replace('4825923','39'),
+  good.replace('19z','99z'),
+  good.replace('uid=Synthetic','uid='),
+  good+'&uid=duplicate',
+  good.split('?')[0],
+  'https://map.baidu.com/?s=inf%26uid%3DSynthetic'
+ ])assert.throws(()=>parseMapLink(bad),undefined,bad);
+ assert.equal(mapLinkFromText(good+' https://example.invalid/'),null);
+});

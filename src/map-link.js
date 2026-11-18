@@ -1,4 +1,5 @@
 import {toWgs} from './coordinates.js';
+import {bd09McToBd09} from './baidu-mercator.js';
 
 const GOOGLE_HOSTS=new Set(['www.google.com','google.com','maps.google.com']);
 const SHORT_HOSTS=new Set(['surl.amap.com','j.map.baidu.com','maps.app.goo.gl','goo.gl']);
@@ -28,7 +29,8 @@ function singleLink(text){
    if(char===')')balance--;
   }
   while(balance<0&&token.endsWith(')')){token=token.slice(0,-1);balance++;}
-  return token;
+  // A copied Markdown link can escape the query separator in both copies.
+  return token.replace(/\\&/gu,'&');
  });
  const [only,...rest]=[...new Set(links)];
  if(!only||rest.length)return null;
@@ -60,7 +62,7 @@ export function mapLinkFromText(text){
  const path=url.pathname;
  if(url.hostname==='uri.amap.com'&&['/marker','/navigation'].includes(path)||
     url.hostname==='api.map.baidu.com'&&path==='/marker'||
-    url.hostname==='map.baidu.com'&&['/','/mobile/'].includes(path)||
+    url.hostname==='map.baidu.com'&&['/','/mobile/'].includes(path)||baiduDesktopPath(url)||
     GOOGLE_HOSTS.has(url.hostname)&& (path==='/maps'||path.startsWith('/maps/'))||
     url.hostname==='surl.amap.com'&&/^\/[A-Za-z0-9]{1,64}$/u.test(path))
   return `https://${url.hostname}${url.pathname}${url.search}`;
@@ -77,6 +79,31 @@ function isBaiduPoiReference(url){
  const s=url.searchParams.getAll('s');
  return url.hostname==='map.baidu.com'&&['/','/mobile/'].includes(url.pathname)&&
   s.length===1&&/^inf&uid=[A-Za-z0-9_-]{1,128}$/u.test(s[0]);
+}
+
+function baiduDesktopPath(url){
+ return url.protocol==='https:'&&url.hostname==='map.baidu.com'&&url.pathname.startsWith('/poi/');
+}
+
+export function isBaiduDesktopPoiLink(text){
+ const url=singleLink(text);
+ return !!url&&baiduDesktopPath(url);
+}
+
+function baiduDesktopCandidate(url){
+ const uid=url.searchParams.getAll('uid');
+ const match=/^\/poi\/([^/]+)\/@([^/,]+),([^/,]+),(?:[1-9]|1\d|2[01])z\/?$/u.exec(url.pathname);
+ if(!match||uid.length!==1||!/^[A-Za-z0-9_-]{1,128}$/u.test(uid[0])||
+    !DECIMAL.test(match[2])||!DECIMAL.test(match[3]))throw rejected();
+ let name;
+ try{
+  name=cleanName(decodeURIComponent(match[1]));
+ }catch{throw rejected();}
+ const original=bd09McToBd09(Number(match[2]),Number(match[3]));
+ // The desktop path is a frame centre, not a guaranteed POI pin. Only
+ // expose it as a candidate; callers may not fill fields before confirmation.
+ return {source:'百度地图桌面地点',datum:'bd09',original,...toWgs(original.lat,original.lng,'bd09'),
+         ...(name?{name}:{}),requiresConfirmation:true,verificationUrl:url.href};
 }
 
 function googlePlace(url){
@@ -99,8 +126,9 @@ function googlePlace(url){
 export function parseMapLink(input){
  const url=strictUrl(typeof input==='string'?input.trim():input);
  if(SHORT_HOSTS.has(url.hostname))throw Error('地图短链接需要在安卓版联网展开，或粘贴包含坐标的完整链接。');
+ if(baiduDesktopPath(url))return baiduDesktopCandidate(url);
  if(isBaiduPoiReference(url))
-  throw Error('这条百度地图链接只返回地点编号，未提供可确认的经纬度。请打开原地图核对点位，再手动录入坐标。');
+  throw Error('这条百度地图链接只返回地点编号，未提供可确认的经纬度。请打开原地图，复制包含坐标的电脑网页版长链接再粘贴。');
  const get=(k)=>{if(url.searchParams.getAll(k).length>1)throw rejected();return url.searchParams.get(k);};
  let pair,datum,source,order,name;
  if(url.hostname==='uri.amap.com'&&['/marker','/navigation'].includes(url.pathname)){

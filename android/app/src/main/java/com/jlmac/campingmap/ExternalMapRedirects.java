@@ -52,7 +52,8 @@ final class ExternalMapRedirects {
             // A legacy cleartext URL is safe to inspect as data only; never request it.
             if (!"https".equalsIgnoreCase(uri.getScheme()) && !"http".equalsIgnoreCase(uri.getScheme())) return false;
             return "api.map.baidu.com".equals(host) && "/marker".equals(path) ||
-                   "map.baidu.com".equals(host) && (path.isEmpty() || "/".equals(path) || "/mobile/".equals(path));
+                   "map.baidu.com".equals(host) && (path.isEmpty() || "/".equals(path) || "/mobile/".equals(path)) ||
+                   "https".equalsIgnoreCase(uri.getScheme()) && "map.baidu.com".equals(host) && path.startsWith("/poi/");
         }
         return "https".equalsIgnoreCase(uri.getScheme()) &&
                ("www.google.com".equals(host) || "google.com".equals(host) || "maps.google.com".equals(host)) &&
