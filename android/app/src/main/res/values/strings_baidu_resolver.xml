@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="baidu_resolver_status">正在读取百度地图候选点（只读）…</string>
+</resources>

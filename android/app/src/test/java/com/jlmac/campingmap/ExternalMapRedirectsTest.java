@@ -44,6 +44,26 @@ public class ExternalMapRedirectsTest {
         assertEquals(Arrays.asList(url, next), requests);
     }
 
+    @Test public void acceptsExactTencentHeaderWithoutVisitingDestination() throws Exception {
+        String start = "https://mmapgwh.map.qq.com/shortlink/short?l=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        String target = "https://map.qq.com/m/map-app/share/poi?coord=116,39&n=Synthetic";
+        List<String> requests = new ArrayList<>();
+        assertEquals(target, ExternalMapRedirects.resolve(start, uri -> {
+            requests.add(uri.toString());
+            return target;
+        }));
+        assertEquals(Arrays.asList(start), requests);
+        try {
+            ExternalMapRedirects.resolve(start + "&next=https://example.invalid", uri -> {
+                fail("must not request unapproved short-link parameters");
+                return null;
+            });
+            fail("must reject unapproved parameters");
+        } catch (IllegalArgumentException expected) {
+            assertEquals("invalid_external_map_link", expected.getMessage());
+        }
+    }
+
     @Test public void refusesUnexpectedDestinationsWithoutFetchingThem() throws Exception {
         for (String target : Arrays.asList(
                 "https://example.com/maps/place/Test",

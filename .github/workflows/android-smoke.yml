@@ -1,17 +1,18 @@
 name: Android installed APK smoke
 on:
-  push:
-    branches: ['feat/coordinate-navigation']
-    paths: ['.github/workflows/android-smoke.yml','tests/android-installed.smoke.cjs']
+  workflow_call:
 permissions:
-  actions: read
   contents: read
 jobs:
   emulator:
+    if: github.ref == 'refs/heads/feat/coordinate-navigation'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -21,14 +22,14 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - uses: actions/download-artifact@v4
         with:
+          # No run-id/token: download the APK produced by this exact caller run.
           name: camping-map-android-debug
-          run-id: 44069742249
-          github-token: ${{ github.token }}
           path: smoke-apk
-      - name: Verify artifact and exercise an installed APK
+      - name: Verify artifact and exercise the installed APK offline
         shell: bash
         run: |
           (cd smoke-apk && sha256sum --check SHA256SUMS.txt)
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           export ANDROID_AVD_HOME="$RUNNER_TEMP/camping-avds"
           mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd --name camping-smoke --package 'system-images;android-35;google_apis;x86_64'
@@ -37,18 +38,32 @@ jobs:
           test -f "$ANDROID_AVD_HOME/camping-smoke.ini" || { echo "::error::AVD manager did not create camping-smoke.ini"; exit 1; }
           export PATH="$ANDROID_HOME/emulator:$PATH"
           "$emulator_bin" -list-avds | grep -Fx camping-smoke
-          "$emulator_bin" -accel off -avd camping-smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/camping-emulator.log" 2>&1 &
-          pid=$!
-          trap 'kill "$pid" 2>/dev/null || true' EXIT
-          if ! timeout 270 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do kill -0 "$1" 2>/dev/null || exit 3; sleep 3; done' _ "$pid"; then
-            echo "::error::Software-mode emulator exited or did not boot within 270 seconds."
-            tail -40 "$RUNNER_TEMP/camping-emulator.log"
+          # Use acceleration already available to the hosted runner without
+          # changing host permissions. Do not repeat the slow TCG fallback.
+          test -c /dev/kvm || { echo "::error::Hosted runner has no KVM; installed APK regression has not run."; exit 1; }
+          if [[ ! -r /dev/kvm || ! -w /dev/kvm ]]; then
+            echo "::error::Hosted runner cannot access KVM; installed APK regression has not run."
             exit 1
           fi
+          "$emulator_bin" -accel-check
+          "$emulator_bin" -port 5554 -accel on -avd camping-smoke -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/camping-emulator.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          export ANDROID_SERIAL=emulator-5554
+          if ! timeout 360 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = 1 ]; do kill -0 "$1" 2>/dev/null || exit 3; sleep 3; done' _ "$pid"; then
+            echo "::error::Emulator exited or did not boot; installed APK regression has not run."
+            tail -60 "$RUNNER_TEMP/camping-emulator.log"
+            exit 1
+          fi
+          test "$(adb shell getprop ro.kernel.qemu | tr -d '\r')" = 1
           adb shell wm size 1080x2380
           adb shell wm density 420
           adb shell input keyevent 82
-          adb install smoke-apk/camping-map-v0.1.0-debug.apk
+          adb shell cmd connectivity airplane-mode enable
+          adb shell svc wifi disable
+          adb shell svc data disable
+          test "$(adb shell settings get global airplane_mode_on | tr -d '\r')" = 1
+          adb install smoke-apk/camping-map-debug.apk
           tool_dir="$RUNNER_TEMP/camping-android-tool"
           npm install --prefix "$tool_dir" --no-audit --no-fund --no-package-lock playwright@1.65.1
           CAMPING_PLAYWRIGHT="$tool_dir/node_modules/playwright" node tests/android-installed.smoke.cjs

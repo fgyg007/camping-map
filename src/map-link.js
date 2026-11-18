@@ -1,8 +1,9 @@
 import {toWgs} from './coordinates.js';
 import {bd09McToBd09} from './baidu-mercator.js';
+import {isTencentMapLink,canonicalTencentShort,parseTencentMapLink} from './tencent-map-link.js';
 
 const GOOGLE_HOSTS=new Set(['www.google.com','google.com','maps.google.com']);
-const SHORT_HOSTS=new Set(['surl.amap.com','j.map.baidu.com','maps.app.goo.gl','goo.gl']);
+const SHORT_HOSTS=new Set(['surl.amap.com','j.map.baidu.com','maps.app.goo.gl','goo.gl','mmapgwh.map.qq.com']);
 const DECIMAL=/^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/u;
 const CAPPED_TEXT=8192;
 const rejected=()=>Error('链接里没有可确认的地点坐标，或坐标系不明确。请打开原地图核对，或手动录入。');
@@ -38,6 +39,8 @@ function singleLink(text){
 }
 
 function canonicalExternalShort(url){
+ const tencent=canonicalTencentShort(url);
+ if(tencent)return tencent;
  const path=url.pathname;
  // Old Baidu share links may use HTTP; upgrade to HTTPS before any fetch.
  if(url.hostname==='j.map.baidu.com'&&/^\/[A-Za-z0-9_-]{1,64}(?:\/[A-Za-z0-9_-]{1,64})?$/u.test(path))
@@ -62,7 +65,7 @@ export function mapLinkFromText(text){
  const path=url.pathname;
  if(url.hostname==='uri.amap.com'&&['/marker','/navigation'].includes(path)||
     url.hostname==='api.map.baidu.com'&&path==='/marker'||
-    url.hostname==='map.baidu.com'&&['/','/mobile/'].includes(path)||baiduDesktopPath(url)||
+    url.hostname==='map.baidu.com'&&['/','/mobile/'].includes(path)||baiduDesktopPath(url)||isTencentMapLink(url)||
     GOOGLE_HOSTS.has(url.hostname)&& (path==='/maps'||path.startsWith('/maps/'))||
     url.hostname==='surl.amap.com'&&/^\/[A-Za-z0-9]{1,64}$/u.test(path))
   return `https://${url.hostname}${url.pathname}${url.search}`;
@@ -79,6 +82,10 @@ function isBaiduPoiReference(url){
  const s=url.searchParams.getAll('s');
  return url.hostname==='map.baidu.com'&&['/','/mobile/'].includes(url.pathname)&&
   s.length===1&&/^inf&uid=[A-Za-z0-9_-]{1,128}$/u.test(s[0]);
+}
+
+export function isBaiduUidOnlyLocation(value){
+ try{return isBaiduPoiReference(strictUrl(value));}catch{return false;}
 }
 
 function baiduDesktopPath(url){
@@ -126,6 +133,7 @@ function googlePlace(url){
 export function parseMapLink(input){
  const url=strictUrl(typeof input==='string'?input.trim():input);
  if(SHORT_HOSTS.has(url.hostname))throw Error('地图短链接需要在安卓版联网展开，或粘贴包含坐标的完整链接。');
+ if(isTencentMapLink(url))return parseTencentMapLink(input);
  if(baiduDesktopPath(url))return baiduDesktopCandidate(url);
  if(isBaiduPoiReference(url))
   throw Error('这条百度地图链接只返回地点编号，未提供可确认的经纬度。请打开原地图，复制包含坐标的电脑网页版长链接再粘贴。');
@@ -133,7 +141,8 @@ export function parseMapLink(input){
  let pair,datum,source,order,name;
  if(url.hostname==='uri.amap.com'&&['/marker','/navigation'].includes(url.pathname)){
   pair=get(url.pathname==='/marker'?'position':'to')?.split(',');
-  if(pair?.length===3)pair.pop();
+  const embeddedName=pair?.length===3?pair.pop():undefined;
+  name=cleanName(get('name')??embeddedName);
   const c=get('coordinate');datum=c==='gaode'?'gcj02':c==='wgs84'?'wgs84':null;
   source='高德地图';order='lng';
  }else if(url.hostname==='api.map.baidu.com'&&url.pathname==='/marker'){
@@ -165,6 +174,8 @@ export function parseExternalMapLocation(location,originalShortUrl){
  const target=strictUrl(location);
  if(!original)throw rejected();
  const baidu=original.startsWith('https://j.map.baidu.com/');
- if(baidu ? !['api.map.baidu.com','map.baidu.com'].includes(target.hostname) : !GOOGLE_HOSTS.has(target.hostname))throw rejected();
+ const tencent=original.startsWith('https://mmapgwh.map.qq.com/');
+ if(baidu?!['api.map.baidu.com','map.baidu.com'].includes(target.hostname):
+    tencent?!isTencentMapLink(target):!GOOGLE_HOSTS.has(target.hostname))throw rejected();
  return parseMapLink(location);
 }

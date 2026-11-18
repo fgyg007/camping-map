@@ -12,6 +12,7 @@ final class ExternalMapRedirects {
     private static final Pattern BAIDU = Pattern.compile("/[A-Za-z0-9_-]{1,64}(/[A-Za-z0-9_-]{1,64})?");
     private static final Pattern GOOGLE = Pattern.compile("/[A-Za-z0-9]{1,64}");
     private static final Pattern GOOGLE_OLD = Pattern.compile("/maps/[A-Za-z0-9]{1,64}");
+    private static final Pattern TENCENT = Pattern.compile("l=[0-9a-f]{32}");
     private static final int MAX_REQUESTS = 2;
     private static final int TIMEOUT_MS = 3000;
 
@@ -35,9 +36,13 @@ final class ExternalMapRedirects {
 
     // The native caller sees only normalized HTTPS URLs, with tracking parameters removed.
     private static String shortProvider(URI uri) {
-        if (uri == null || !"https".equals(uri.getScheme()) || uri.getRawQuery() != null) return null;
+        if (uri == null || !"https".equals(uri.getScheme())) return null;
         String host = uri.getHost().toLowerCase(Locale.ROOT);
         String path = uri.getRawPath();
+        String query = uri.getRawQuery();
+        if ("mmapgwh.map.qq.com".equals(host) && "/shortlink/short".equals(path) &&
+            query != null && TENCENT.matcher(query).matches()) return "tencent";
+        if (query != null) return null;
         if ("j.map.baidu.com".equals(host) && BAIDU.matcher(path).matches()) return "baidu";
         if ("maps.app.goo.gl".equals(host) && GOOGLE.matcher(path).matches() ||
             "goo.gl".equals(host) && GOOGLE_OLD.matcher(path).matches()) return "google";
@@ -55,6 +60,12 @@ final class ExternalMapRedirects {
                    "map.baidu.com".equals(host) && (path.isEmpty() || "/".equals(path) || "/mobile/".equals(path)) ||
                    "https".equalsIgnoreCase(uri.getScheme()) && "map.baidu.com".equals(host) && path.startsWith("/poi/");
         }
+        if ("tencent".equals(provider)) {
+            return "https".equalsIgnoreCase(uri.getScheme()) &&
+                ("map.qq.com".equals(host) && "/m/map-app/share/poi".equals(path) ||
+                 "mapapi.qq.com".equals(host) && "/web/mapComponents/locationMarker/v/index.html".equals(path) ||
+                 "apis.map.qq.com".equals(host) && ("/uri/v1/marker".equals(path) || "/tools/poimarker".equals(path)));
+        }
         return "https".equalsIgnoreCase(uri.getScheme()) &&
                ("www.google.com".equals(host) || "google.com".equals(host) || "maps.google.com".equals(host)) &&
                path.startsWith("/maps/");
@@ -70,7 +81,7 @@ final class ExternalMapRedirects {
             // Only absolute, provider-owned HTTPS short hops. Do not follow arbitrary destination URLs.
             URI next = parse(location);
             if (terminal(next, provider)) return next.toASCIIString();
-            if (next != null && next.getRawQuery() != null) {
+            if (!"tencent".equals(provider) && next != null && next.getRawQuery() != null) {
                 next = parse(next.toASCIIString().split("\\?", 2)[0]);
             }
             if (!provider.equals(shortProvider(next)) || next.equals(current) || next.equals(first)) break;

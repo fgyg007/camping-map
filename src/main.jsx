@@ -9,7 +9,7 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import {samples,categories,statuses,facilities,validatePlace,parseBackupDocument,navigationUrl,baiduMarkerUrl,baiduCandidateMarkerUrl} from './data.js';
 import {toWgs,amapRoute,wgsToGcj} from './coordinates.js';
-import {parseMapLink,mapLinkFromText,externalMapShortFromText,parseExternalMapLocation,isBaiduDesktopPoiLink} from './map-link.js';
+import {parseMapLink,mapLinkFromText,externalMapShortFromText,parseExternalMapLocation,isBaiduUidOnlyLocation} from './map-link.js';
 import {PhotoEditor,PhotoGallery,VehicleEditor} from './preview-features.jsx';
 import {amapShortFromText,parseAmapLocation} from './amap-share.js';
 const MapShare=registerPlugin('MapShare');
@@ -17,14 +17,32 @@ const KEY='camping-map-v1';
 const symbols={'湖畔':Waves,'山野':Trees,'海边':Waves,'服务区':Car,'其他':Mountain};
 const MAX_BACKUP_BYTES=5e6;
 function load(){try{const raw=localStorage.getItem(KEY);return {...(raw?parseBackupDocument(raw):{places:samples,vehicle:null}),error:''};}catch{return {places:[],vehicle:null,error:'本机数据无法读取。为保护原记录，暂不覆盖；请先导出原始数据备份，再刷新重试。'};}}
-async function resolveSharedPoint(value){
+function shortMapLink(text){
+ const url=mapLinkFromText(text);
+ return url?(amapShortFromText(url)||externalMapShortFromText(url)):null;
+}
+function baiduShortLink(text){
+ const url=externalMapShortFromText(text);
+ return url?.startsWith('https://j.map.baidu.com/')?url:null;
+}
+async function resolveSharedPoint(value,stillCurrent){
  const link=mapLinkFromText(value);
- if(!link)throw Error('请只提供一个支持的高德、百度或 Google 地图链接。');
+ if(!link)throw Error('请只提供一个支持的高德、百度、腾讯或 Google 地图链接。');
  const amap=amapShortFromText(link),external=externalMapShortFromText(link);
  if(!amap&&!external)return parseMapLink(link);
  if(Capacitor.getPlatform()!=='android')throw Error('分享短链接目前仅可在 Android 版解析；也可先打开原链接，再粘贴带明确坐标的长链接。');
  if(amap)return parseAmapLocation((await MapShare.resolveAmap({url:amap})).location);
- return parseExternalMapLocation((await MapShare.resolveExternalMapLink({url:external})).location,external);
+ const first=(await MapShare.resolveExternalMapLink({url:external})).location;
+ if(!stillCurrent())throw Error('map_import_superseded');
+ if(baiduShortLink(external)&&isBaiduUidOnlyLocation(first)){
+  try{
+   const resolved=await MapShare.resolveBaiduPoiCandidate({location:first});
+   if(!stillCurrent())throw Error('map_import_superseded');
+   const candidate=parseExternalMapLocation(resolved.location,external);
+   if(candidate.requiresConfirmation)return candidate;
+  }catch{/* A blocked, canceled or unknown result will keep the original UID-only guidance. */}
+ }
+ return parseExternalMapLocation(first,external);
 }
 function shareError(err){
  const code=String(err?.message||'');
@@ -99,13 +117,13 @@ function App(){
   <aside className="rail"><div className="brand-icon"><Tent size={27}/></div><span className="rail-name">野泊</span><button className={!onlyFavorites?'rail-btn active':'rail-btn'} aria-label="所有地点" onClick={()=>setOnlyFavorites(false)}><MapIcon/></button><button className={onlyFavorites?'rail-btn active':'rail-btn'} aria-label="我的收藏" onClick={()=>setOnlyFavorites(!onlyFavorites)}><Heart/></button><div className="rail-bottom">在路上<br/>也自在</div></aside>
   <main><header><div><div className="eyebrow">WILD STAYS · 寻一处自在</div><h1>让旅途，有处落脚<span>。</span></h1><p>把喜欢的风景，存进自己的露营地图。</p></div><div className="header-actions"><button type="button" onClick={()=>setVehicleOpen(true)}><Car size={17}/>我的车辆</button><button className="primary" onClick={()=>setEditing({})}><Plus size={18}/>添加地点</button></div></header>
   <div className="toolbar"><div className="search"><Search size={19}/><input aria-label="搜索地点" placeholder="搜索地点、路况或备注…" value={query} onChange={e=>setQuery(e.target.value)}/></div><button className={'filter '+(onlyFavorites?'chosen':'')} onClick={()=>setOnlyFavorites(!onlyFavorites)}><Heart size={17}/><span>我的收藏</span></button>{hasInlineMap&&<div className="view-switch"><button aria-label="地图视图" className={view==='map'?'chosen':''} onClick={()=>setView('map')}><MapIcon size={18}/></button><button aria-label="列表视图" className={view==='list'?'chosen':''} onClick={()=>setView('list')}><List size={18}/></button></div>}</div>
-  <div className="category-row">{['全部',...categories].map(c=><button key={c} className={category===c?'chip chosen':'chip'} onClick={()=>setCategory(c)}>{c==='全部'?'全部地点':c}</button>)}<span className="local-label"><span/>仅保存在本机</span></div>
+  <div className="category-row">{['全部',...categories].map(c=><button key={c} className={category===c?'chip chosen':'chip'} onClick={()=>setCategory(c)}>{c==='全部'?'全部地点':c}</button>)}<span className="local-label"><span/>野泊不自动上传</span></div>
   {incoming&&<div className="warning" role="status">收到地图分享。 <button type="button" disabled={!!editing} onClick={()=>{setEditing({shareText:incoming});setIncoming('');}}>预览分享地点</button> <button type="button" onClick={()=>setIncoming('')}>忽略</button></div>}
   {storageError&&<div role="alert" className="warning">{storageError}</div>}
   <section className={'workspace '+(!showMap?'list-mode':'')}>
    <div className="places-panel"><div className="panel-heading"><div><h2>{onlyFavorites?'收藏的风景':'探索落脚点'}</h2><span>{filtered.length} 个地点 · 慢下来，去看看</span></div><SlidersHorizontal size={18}/></div>
    <div className="cards">{filtered.length===0?<div className="empty"><Tent size={40}/><h3>下一站，由你发现</h3><p>试试其他筛选，或添加第一个地点。</p><button onClick={()=>setEditing({})}>添加地点 <Plus size={16}/></button></div>:filtered.map(p=>{const Icon=symbols[p.category];return <article key={p.id} className={'card '+(selected===p.id?'selected':'')}><button className="card-main" onClick={()=>{setSelected(p.id);}}><div className={'scenery scenery-'+p.category}>{p.photos?.[0]?<img src={p.photos[0]} alt="" loading="lazy"/>:<Icon size={30}/>}<span>{p.category}</span></div><div className="card-info"><div className="card-meta">{p.demo?'演示地点':'我的地点'}<span className={'status '+(p.status==='关闭'?'closed':'')}>{p.status}</span></div><h3>{p.name}</h3><p>{p.notes||'还没有备注，记录一些现场见闻吧。'}</p><div className="tags">{p.facilities.length?p.facilities.map(f=><span key={f}>{f}</span>):<span>设施待补充</span>}</div></div></button><button className={'favorite '+(p.favorite?'saved':'')} aria-label={`${p.favorite?'取消收藏':'收藏'}${p.name}`} onClick={()=>toggle(p)}><Heart size={17} fill={p.favorite?'currentColor':'none'}/></button></article>})}</div>
-   <div className="panel-footer"><button onClick={download}><Download size={15}/>导出备份</button><button onClick={()=>file.current.click()}><Upload size={15}/>导入备份</button><input hidden ref={file} type="file" accept=".json,application/json" onChange={importFile}/></div></div>
+   <div className="panel-footer"><button onClick={download}><Download size={15}/>导出备份</button><button onClick={()=>file.current.click()}><Upload size={15}/>导入备份</button><input hidden ref={file} type="file" accept=".json,application/json" onChange={importFile}/></div>{Capacitor.getPlatform()==='android'&&<p className="hint backup-privacy">野泊不自动上传营地、照片或车辆资料。根据手机设置，Android 系统备份可能包含这些数据。</p>}</div>
    {showMap&&<div className="map-wrap"><div className="map-canvas" ref={mapEl}/><div className="map-caption"><span className="live-dot"/>一路的风景，都在这里<span className="map-caption-sub">在线底图 · WGS-84</span></div>{tileError&&<div className="map-error">底图暂时无法加载，地点列表仍可使用。请检查网络。<button type="button" onClick={()=>setView('list')}>返回列表</button></div>}<div className="map-note"><Tent size={18}/><span>留下坐标，带走回忆。</span></div></div>}
   </section><footer><span>野泊 / 个人露营手账</span><span>演示地点未经实测 · 出行前请核实开放与通行情况</span><span>v0.1.0</span></footer>
   </main>
@@ -117,7 +135,14 @@ function App(){
    if(result.target==='web')message('未能打开高德 App，已改用网页。');
   }catch{message('未能打开高德路线。可复制坐标后手动在地图中打开。');}
  }}><Navigation size={18}/>高德路线规划<ArrowUpRight size={17}/></button>
- :<a className="primary navigation" href={amapRoute(current)} target="_blank" rel="noreferrer"><Navigation size={18}/>高德路线规划<ArrowUpRight size={17}/></a>)}<a className="primary navigation" href={baiduMarkerUrl(current)} target="_blank" rel="noreferrer"><MapPin size={18}/>百度地图看点<ArrowUpRight size={17}/></a><p className="hint">打开地图会把目的地坐标发送给对应地图服务。导航需要网络；也可复制坐标到支持 WGS-84 的地图。</p><div className="detail-actions"><button onClick={async()=>{try{await navigator.clipboard.writeText(`${current.lat}, ${current.lng}`);message('已复制 WGS-84 坐标');}catch{message('无法自动复制，请长按坐标手动复制');}}}>复制坐标</button><button onClick={()=>setEditing(current)}><Pencil size={15}/>编辑</button><button className="danger" onClick={()=>{if(confirm(`删除“${current.name}”？此操作不可撤销。`)&&save(places.filter(p=>p.id!==current.id))){setSelected(null);message('地点已删除');}}}><Trash2 size={15}/>删除</button></div></div></section></div>}
+ :<a className="primary navigation" href={amapRoute(current)} target="_blank" rel="noreferrer"><Navigation size={18}/>高德路线规划<ArrowUpRight size={17}/></a>)}{Capacitor.getPlatform()==='android'
+ ?<button type="button" className="primary navigation" onClick={async()=>{
+  try{
+   const result=await MapShare.openBaiduMarker({lat:current.lat,lng:current.lng});
+   if(result.target==='web')message('未能打开百度地图 App，已改用网页。');
+  }catch{message('未能打开百度地图。可复制坐标后手动在地图中打开。');}
+ }}><MapPin size={18}/>百度地图看点<ArrowUpRight size={17}/></button>
+ :<a className="primary navigation" href={baiduMarkerUrl(current)} target="_blank" rel="noreferrer"><MapPin size={18}/>百度地图看点<ArrowUpRight size={17}/></a>}<p className="hint">打开地图会把目的地坐标发送给对应地图服务。导航需要网络；也可复制坐标到支持 WGS-84 的地图。</p><div className="detail-actions"><button onClick={async()=>{try{await navigator.clipboard.writeText(`${current.lat}, ${current.lng}`);message('已复制 WGS-84 坐标');}catch{message('无法自动复制，请长按坐标手动复制');}}}>复制坐标</button><button onClick={()=>setEditing(current)}><Pencil size={15}/>编辑</button><button className="danger" onClick={()=>{if(confirm(`删除“${current.name}”？此操作不可撤销。`)&&save(places.filter(p=>p.id!==current.id))){setSelected(null);message('地点已删除');}}}><Trash2 size={15}/>删除</button></div></div></section></div>}
   {vehicleOpen&&<VehicleEditor vehicle={vehicle} onClose={()=>setVehicleOpen(false)} onSave={value=>{
    if(!save(places,{nextVehicle:value}))return false;
    setVehicleOpen(false);message('已保存车辆：'+value.model);return true;
@@ -136,61 +161,90 @@ function App(){
 }
 function Editor({place,onClose,onSave,saveError}){
  const [draft,setDraft]=useState({name:'',lat:'',lng:'',category:'其他',status:'待核实',notes:'',facilities:[],heightLimit:'',verifiedAt:'',photos:[],...place}),[error,setError]=useState(''),[system,setSystem]=useState('wgs84'),[link,setLink]=useState(place.shareText||''),[preview,setPreview]=useState(null),[verificationLink,setVerificationLink]=useState(''),[importError,setImportError]=useState(''),[resolving,setResolving]=useState(false),[photoBusy,setPhotoBusy]=useState(false);
- const request=useRef(0);
- async function showLinkPreview(value,{fromShare=false}={}){
-  const token=++request.current;
-  setResolving(true);setPreview(null);setVerificationLink('');setImportError('');
+ const [conflict,setConflict]=useState(false);
+ const request=useRef(0),draftRef=useRef(draft),owned=useRef({name:false,coordinates:false});
+ function updateDraft(next){draftRef.current=next;setDraft(next);}
+ function clearAutoImport(){
+  const {name,coordinates}=owned.current;
+  owned.current={name:false,coordinates:false};
+  if(name||coordinates)updateDraft({...draftRef.current,...(name?{name:''}:{}),...(coordinates?{lat:'',lng:''}:{})});
+  if(coordinates)setSystem('wgs84');
+ }
+ function resetImport(){
+  request.current++;
+  clearAutoImport();
+  setResolving(false);setPreview(null);setVerificationLink('');setImportError('');setConflict(false);
+ }
+ function applyImported(result){
+  const d=draftRef.current,name=!!result.name&&!d.name.trim();
+  owned.current={name,coordinates:true};
+  updateDraft({...d,lat:result.lat,lng:result.lng,name:name?result.name:d.name});
+  setSystem('wgs84');setConflict(false);
+ }
+ function showResult(result,value){
+  setPreview(result);
+  setVerificationLink(result.verificationUrl||mapLinkFromText(value)||'');
+  const d=draftRef.current;
+  if(d.lat!==''||d.lng!==''){setConflict(true);return;}
+  applyImported(result);
+ }
+ async function showLinkPreview(value){
+  resetImport();
+  const token=request.current;
+  const stillCurrent=()=>token===request.current;
+  setResolving(true);
   try{
-   const result=await resolveSharedPoint(value);
-   if(token!==request.current)return;
-   setPreview(result);
-   if(result.requiresConfirmation)setVerificationLink(result.verificationUrl);
-   if(fromShare&&!result.requiresConfirmation)
-    setDraft(d=>({...d,lat:d.lat===''?result.lat:d.lat,lng:d.lng===''?result.lng:d.lng,name:d.name||result.name||''}));
-  }catch(err){if(token===request.current)setImportError(shareError(err));}
-  finally{if(token===request.current)setResolving(false);}
+   const result=await resolveSharedPoint(value,stillCurrent);
+   if(stillCurrent())showResult(result,value);
+  }catch(err){if(stillCurrent())setImportError(shareError(err));}
+  finally{if(stillCurrent())setResolving(false);}
  }
  useEffect(()=>{
-  if(place.shareText)showLinkPreview(place.shareText,{fromShare:true});
+  if(place.shareText)showLinkPreview(place.shareText);
   return ()=>{request.current++;};
  },[]);
- const set=(key,value)=>setDraft(d=>({...d,[key]:value}));
- const requiresConfirmation=preview?.requiresConfirmation===true;
- const originalLink=verificationLink||((importError||isBaiduDesktopPoiLink(link))?mapLinkFromText(link):null);
+ const set=(key,value)=>{
+  if(key==='lat'||key==='lng')owned.current.coordinates=false;
+  if(key==='name')owned.current.name=false;
+  updateDraft({...draftRef.current,[key]:value});
+ };
+ const approximate=preview?.requiresConfirmation===true;
+ const originalLink=verificationLink||(importError?mapLinkFromText(link):null);
+ const originalShort=baiduShortLink(link);
  function changeLink(value){
-  request.current++;
-  setResolving(false);setLink(value);setPreview(null);setVerificationLink('');setImportError('');
-  if(isBaiduDesktopPoiLink(value)){
-   try{
-    // Desktop Baidu parsing is local. Automatically show a valid candidate
-    // on paste/input; do not modify the current coordinate fields.
-    setPreview(parseMapLink(mapLinkFromText(value)));
-   }catch{/* Let the explicit preview action show an error for incomplete or unsupported input. */}
+  if(value===link)return;
+  resetImport();setLink(value);
+  const candidateLink=mapLinkFromText(value);
+  if(candidateLink&&!shortMapLink(value)){
+   try{showResult(parseMapLink(candidateLink),value);}catch{/* Wait for committed paste or explicit retry to explain failure. */}
   }
  }
- function applyPreview(){
-  if(!preview)return;
-  setDraft(d=>({...d,lat:preview.lat,lng:preview.lng,name:d.name||preview.name||''}));
-  setSystem('wgs84');setPreview(null);
-  if(!requiresConfirmation)setLink('');
+ function pasteLink(event){
+  const value=event.clipboardData?.getData('text/plain')?.trim();
+  if(!value||!mapLinkFromText(value))return;
+  // Only a committed paste, share or retry can start a network lookup; typing cannot.
+  event.preventDefault();
+  setLink(value);
+  showLinkPreview(value);
  }
  useEffect(()=>{const handler=e=>{if(e.key==='Escape')onClose();};document.addEventListener('keydown',handler);return ()=>document.removeEventListener('keydown',handler);},[]);
  return <div className="overlay"><section className="dialog editor" role="dialog" aria-modal="true" aria-label={place.id?'编辑地点':'添加地点'}><button className="close" aria-label="关闭表单" onClick={onClose}><X/></button><span className="eyebrow">SAVE A LITTLE WILD</span><h2>{place.id?'完善这个落脚点':'记录新的落脚点'}</h2><p>留下位置，也留下对下一次出发有用的信息。</p><details open={place.shareText?true:undefined}>
   <summary>从地图链接导入</summary>
-  <label>地图分享链接<input type="text" inputMode="url" maxLength={8192} value={link} onChange={e=>changeLink(e.target.value)}/></label>
-  <button type="button" disabled={resolving} onClick={()=>showLinkPreview(link)}>{resolving?'正在读取地图点位…':'预览链接坐标'}</button>
+  <label>地图分享链接<input type="text" inputMode="url" maxLength={8192} value={link} onChange={e=>changeLink(e.target.value)} onPaste={pasteLink}/></label>
+  {resolving&&<p className="hint" role="status">正在读取地图点位…</p>}
+  {!resolving&&link.trim()&&!preview&&<button type="button" onClick={()=>showLinkPreview(link)}>{importError?'重试读取链接':'读取链接'}</button>}
   {importError&&<p className="warning" role="alert">{importError}</p>}
   {originalLink&&<p className="hint"><a href={originalLink} target="_blank" rel="noreferrer">打开原地图链接</a></p>}
+  {verificationLink&&originalShort&&verificationLink!==originalShort&&<p className="hint"><a href={originalShort} target="_blank" rel="noreferrer">打开原分享短链接</a></p>}
   {preview&&<div>
    <p>来源：{preview.source} · {preview.datum.toUpperCase()} · {preview.original.lat.toFixed(6)}, {preview.original.lng.toFixed(6)}</p>
    {preview.assumedDatum&&<p className="hint">按来源地图坐标约定换算，请核对原图钉：{preview.name||'无名称'}。</p>}
-   {requiresConfirmation&&<p className="warning" role="status">这是地图画面中心换算出的近似候选点，不一定是地点图钉或停车入口。先打开原地图核对，再使用，不会自动保存。</p>}
-   <p>{requiresConfirmation?'候选坐标':'保存坐标'}（WGS-84）：{preview.lat.toFixed(6)}, {preview.lng.toFixed(6)}</p>
-   {requiresConfirmation&&<p className="hint"><a href={baiduCandidateMarkerUrl(preview.original)} target="_blank" rel="noreferrer">在百度地图看候选点</a></p>}
-   <button type="button" onClick={applyPreview}>{requiresConfirmation?'确认使用候选点':'填入表单'}</button>
-   {requiresConfirmation&&<button type="button" onClick={()=>setPreview(null)}>保留当前坐标</button>}
+   {approximate&&<p className="warning" role="status">这是地图画面中心换算出的近似点，不一定是地点图钉或停车入口。请核对后再保存。</p>}
+   <p>{conflict?'链接坐标':approximate?'已填近似坐标':'已填坐标'}（WGS-84）：{preview.lat.toFixed(6)}, {preview.lng.toFixed(6)}</p>
+   {approximate&&<p className="hint"><a href={baiduCandidateMarkerUrl(preview.original)} target="_blank" rel="noreferrer">在百度地图看候选点</a></p>}
+   {conflict&&<div><p className="warning" role="status">表单已有坐标，未覆盖。请选择保留这组坐标，或整组替换。</p><button type="button" onClick={()=>applyImported(preview)}>替换为链接位置</button><button type="button" onClick={()=>{setConflict(false);setPreview(null);}}>保留当前坐标</button></div>}
   </div>}
-  <p className="hint">支持高德、百度、Google 分享或粘贴。先在本机识别长链接；Android 预览短链接会向原地图查询跳转，不上传备注或保存链接。</p>
- </details><form onSubmit={e=>{e.preventDefault();if(resolving||photoBusy||requiresConfirmation)return;setError('');try{onSave(validatePlace({...draft,...toWgs(draft.lat,draft.lng,system)}));}catch(err){setError(err.message);}}}><label>地点名称<input autoFocus required maxLength={80} value={draft.name} onChange={e=>set('name',e.target.value)} placeholder="例如：湖边停车场"/></label><label>输入坐标系<select disabled={resolving} value={system} onChange={e=>setSystem(e.target.value)}><option value="wgs84">GPS / WGS-84</option><option value="gcj02">高德 / 腾讯 (GCJ-02)</option><option value="bd09">百度经纬度 (BD-09)</option></select></label><div className="form-row"><label>纬度<input required disabled={resolving} type="number" step="any" min="-90" max="90" value={draft.lat} onChange={e=>set('lat',e.target.value)} placeholder="30.250000"/></label><label>经度<input required disabled={resolving} type="number" step="any" min="-180" max="180" value={draft.lng} onChange={e=>set('lng',e.target.value)} placeholder="120.150000"/></label></div><p className="hint">请选择与来源一致的坐标系。保存时近似转换为 WGS-84，仅有地点编号或坐标系不明的链接不会填入；百度桌面地址的画面中心只供确认。导航前请核对落点。</p><div className="form-row"><label>地点类型<select value={draft.category} onChange={e=>set('category',e.target.value)}>{categories.map(x=><option key={x}>{x}</option>)}</select></label><label>开放状态<select value={draft.status} onChange={e=>set('status',e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></label></div><fieldset><legend>已确认的设施</legend>{facilities.map(f=><label className="checkbox" key={f}><input type="checkbox" checked={draft.facilities.includes(f)} onChange={e=>set('facilities',e.target.checked?[...draft.facilities,f]:draft.facilities.filter(x=>x!==f))}/>{f}</label>)}</fieldset><div className="form-row"><label>实测限高（米，可不填）<input type="number" step="0.01" min="0.01" max="10" value={draft.heightLimit} onChange={e=>set('heightLimit',e.target.value)}/></label><label>核实日期（可不填）<input type="date" max={new Date().toISOString().slice(0,10)} value={draft.verifiedAt} onChange={e=>set('verifiedAt',e.target.value)}/></label></div><label>现场备注<textarea rows="3" maxLength={2000} value={draft.notes} onChange={e=>set('notes',e.target.value)} placeholder="入口路况、收费、夜间环境、是否允许过夜…"/></label><PhotoEditor photos={draft.photos} onChange={value=>set('photos',value)} busy={photoBusy} onBusy={setPhotoBusy}/>{(error||saveError)&&<p role="alert" className="warning">{error||saveError}</p>}<div className="form-actions"><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={resolving||photoBusy||requiresConfirmation}><Check size={18}/>保存地点</button></div></form></section></div>
+  <p className="hint">粘贴高德、百度、腾讯、Google 地图链接，自动尝试填写，再核对并保存。查短链接需联网，不上传备注或保存链接。</p>
+ </details><form onSubmit={e=>{e.preventDefault();if(resolving||photoBusy||conflict)return;setError('');try{onSave(validatePlace({...draft,...toWgs(draft.lat,draft.lng,system)}));}catch(err){setError(err.message);}}}><label>地点名称<input autoFocus required maxLength={80} value={draft.name} onChange={e=>set('name',e.target.value)} placeholder="例如：湖边停车场"/></label><label>输入坐标系<select disabled={resolving} value={system} onChange={e=>{owned.current.coordinates=false;setSystem(e.target.value);}}><option value="wgs84">GPS / WGS-84</option><option value="gcj02">高德 / 腾讯 (GCJ-02)</option><option value="bd09">百度经纬度 (BD-09)</option></select></label><div className="form-row"><label>纬度<input required disabled={resolving} type="number" step="any" min="-90" max="90" value={draft.lat} onChange={e=>set('lat',e.target.value)} placeholder="30.250000"/></label><label>经度<input required disabled={resolving} type="number" step="any" min="-180" max="180" value={draft.lng} onChange={e=>set('lng',e.target.value)} placeholder="120.150000"/></label></div><p className="hint">请选择与来源一致的坐标系。保存时近似转换为 WGS-84，仅有地点编号或坐标系不明的链接不会填入；百度桌面地址的画面中心只供确认。导航前请核对落点。</p><div className="form-row"><label>地点类型<select value={draft.category} onChange={e=>set('category',e.target.value)}>{categories.map(x=><option key={x}>{x}</option>)}</select></label><label>开放状态<select value={draft.status} onChange={e=>set('status',e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></label></div><fieldset><legend>已确认的设施</legend>{facilities.map(f=><label className="checkbox" key={f}><input type="checkbox" checked={draft.facilities.includes(f)} onChange={e=>set('facilities',e.target.checked?[...draft.facilities,f]:draft.facilities.filter(x=>x!==f))}/>{f}</label>)}</fieldset><div className="form-row"><label>实测限高（米，可不填）<input type="number" step="0.01" min="0.01" max="10" value={draft.heightLimit} onChange={e=>set('heightLimit',e.target.value)}/></label><label>核实日期（可不填）<input type="date" max={new Date().toISOString().slice(0,10)} value={draft.verifiedAt} onChange={e=>set('verifiedAt',e.target.value)}/></label></div><label>现场备注<textarea rows="3" maxLength={2000} value={draft.notes} onChange={e=>set('notes',e.target.value)} placeholder="入口路况、收费、夜间环境、是否允许过夜…"/></label><PhotoEditor photos={draft.photos} onChange={value=>set('photos',value)} busy={photoBusy} onBusy={setPhotoBusy}/>{(error||saveError)&&<p role="alert" className="warning">{error||saveError}</p>}<div className="form-actions"><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={resolving||photoBusy||conflict}><Check size={18}/>保存地点</button></div></form></section></div>
 }
 createRoot(document.getElementById('root')).render(<App/>);

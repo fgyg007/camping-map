@@ -51,15 +51,21 @@ jobs:
       - name: Collect verified APK
         run: |
           mkdir -p artifacts
-          cp android/app/build/outputs/apk/debug/app-debug.apk artifacts/camping-map-v0.1.0-debug.apk
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose artifacts/camping-map-v0.1.0-debug.apk > artifacts/signature-verification.txt
+          name=camping-map-debug.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk "artifacts/$name"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "artifacts/$name" > artifacts/signature-verification.txt
           aapt="$ANDROID_HOME/build-tools/36.0.0/aapt2"
-          "$aapt" dump resources artifacts/camping-map-v0.1.0-debug.apk > "$RUNNER_TEMP/camping-resources.txt"
+          "$aapt" dump badging "artifacts/$name" > artifacts/apk-metadata.txt
+          code="$(awk '/^[[:space:]]*versionCode [0-9]+$/ { print $2 }' android/app/build.gradle)"
+          version="$(awk -F'"' '/^[[:space:]]*versionName "[0-9.]+"/ { print $2 }' android/app/build.gradle)"
+          test -n "$code" && test -n "$version"
+          grep -Fq "package: name='com.jlmac.campingmap' versionCode='$code' versionName='$version'" artifacts/apk-metadata.txt
+          "$aapt" dump resources "artifacts/$name" > "$RUNNER_TEMP/camping-resources.txt"
           grep -E '(mipmap/ic_launcher|drawable/ic_launcher_monochrome)' "$RUNNER_TEMP/camping-resources.txt" > artifacts/launcher-resources.txt
           grep -q 'mipmap/ic_launcher_round' artifacts/launcher-resources.txt
           grep -q 'drawable/ic_launcher_monochrome' artifacts/launcher-resources.txt
           cd artifacts
-          sha256sum camping-map-v0.1.0-debug.apk > SHA256SUMS.txt
+          sha256sum "$name" > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: camping-map-android-debug
@@ -72,3 +78,7 @@ jobs:
           name: android-lint-report
           path: android/app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
+  installed-apk:
+    if: github.ref == 'refs/heads/feat/coordinate-navigation'
+    needs: build
+    uses: ./.github/workflows/android-smoke.yml

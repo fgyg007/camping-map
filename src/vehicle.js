@@ -10,6 +10,8 @@ export function validateVehicle(vehicle){
  const model=typeof vehicle.model==='string'?vehicle.model.trim():'';
  if(!model||model.length>100)throw Error('请填写 1–100 字的车型名称');
  const clean={model,catalogId:typeof vehicle.catalogId==='string'&&/^[a-z0-9-]{1,80}$/.test(vehicle.catalogId)?vehicle.catalogId:''};
+ const brand=typeof vehicle.brand==='string'?vehicle.brand.trim():'';
+ if(brand&&brand.length<=40)clean.brand=brand;
  for(const {key,label,max} of vehicleDimensions){
   const value=vehicle[key];
   if(value===''||value==null){clean[key]='';continue;}

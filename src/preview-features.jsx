@@ -2,7 +2,7 @@ import React,{useState,useEffect,useRef} from 'react';
 import {Check,X,Camera,Car} from 'lucide-react';
 import {MAX_PLACE_PHOTOS,preparePhoto} from './photos.js';
 import {EMPTY_VEHICLE,validateVehicle,vehicleDimensions} from './vehicle.js';
-import {VEHICLE_CATALOG} from './vehicle-catalog.js';
+import {VEHICLE_BRANDS,VEHICLE_CATALOG,vehiclesForBrand} from './vehicle-catalog.js';
 
 export function PhotoEditor({photos=[],onChange,busy,onBusy}){
  const input=useRef(null),live=useRef(true),[issue,setIssue]=useState('');
@@ -25,7 +25,7 @@ export function PhotoEditor({photos=[],onChange,busy,onBusy}){
   finally{if(live.current)onBusy(false);}
  }
  return <fieldset className="photo-editor"><legend><Camera size={16}/>营地照片</legend>
-  <p className="hint">每个地点最多 3 张。照片会压缩、去除原始照片的位置信息，只存本机并随备份导出。</p>
+  <p className="hint">每个地点最多 3 张。照片会压缩、去除原始照片的位置信息，由野泊保存在设备，不自动上传；会随手动备份导出，也可能纳入 Android 系统备份。</p>
   {photos.length>0&&<div className="photo-grid">{photos.map((photo,i)=><div className="photo-item" key={i}><img alt={'待保存照片 '+(i+1)} src={photo}/><button type="button" aria-label={'移除照片 '+(i+1)} onClick={()=>onChange(photos.filter((_,j)=>j!==i))} disabled={busy}><X size={16}/></button></div>)}</div>}
   <button type="button" disabled={busy||photos.length>=MAX_PLACE_PHOTOS} onClick={()=>input.current.click()}><Camera size={16}/>{busy?'正在处理照片…':'从相册添加'}</button>
   <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" aria-label="添加营地照片" hidden multiple onChange={add}/>
@@ -43,15 +43,21 @@ export function PhotoGallery({photos=[]}){
 }
 export function VehicleEditor({vehicle,onClose,onSave}){
  const [form,setForm]=useState(()=>({...EMPTY_VEHICLE,...vehicle})),[issue,setIssue]=useState('');
- const preset=VEHICLE_CATALOG.find(v=>v.id===form.catalogId);
+ const [brand,setBrand]=useState(()=>VEHICLE_CATALOG.find(v=>v.id===vehicle?.catalogId)?.brand||(VEHICLE_BRANDS.includes(vehicle?.brand)?vehicle.brand:''));
+ const choices=vehiclesForBrand(brand);
+ const preset=choices.find(v=>v.id===form.catalogId);
  return <div className="overlay" onClick={onClose}><section className="dialog editor vehicle-dialog" aria-label="我的车辆" aria-modal="true" role="dialog" onClick={e=>e.stopPropagation()}>
   <button className="close" aria-label="关闭车辆" onClick={onClose}><X/></button><span className="eyebrow">MY VEHICLE</span><h2><Car size={22}/> 我的车辆</h2>
   <p>选择常见车型带出原厂参考尺寸，找不到就直接填写。加装件请按实测调整。</p>
-  <form onSubmit={e=>{e.preventDefault();setIssue('');try{if(!onSave(validateVehicle(form)))setIssue('未保存车辆，请检查存储空间。');}catch(err){setIssue(err.message);}}}>
-   <label>选择常见车型<select value={preset?.id||''} onChange={e=>{
-    const p=VEHICLE_CATALOG.find(v=>v.id===e.target.value);
-    setForm(p?{catalogId:p.id,model:p.model+' '+p.trim,lengthMm:p.lengthMm,widthMm:p.widthMm,heightMm:p.heightMm}:{...EMPTY_VEHICLE});
-   }}><option value="">自定义（手动录入）</option>{VEHICLE_CATALOG.map(v=><option value={v.id} key={v.id}>{v.model} · {v.trim}</option>)}</select></label>
+  <form onSubmit={e=>{e.preventDefault();setIssue('');try{if(!onSave(validateVehicle({...form,brand})))setIssue('未保存车辆，请检查存储空间。');}catch(err){setIssue(err.message);}}}>
+   <label>选择品牌<select value={brand} onChange={e=>{
+    setBrand(e.target.value);
+    setForm(current=>({...current,catalogId:''}));
+   }}><option value="">其他品牌 / 不选品牌（手动录入）</option>{VEHICLE_BRANDS.map(value=><option key={value} value={value}>{value}</option>)}</select></label>
+   <label>选择车型<select disabled={!brand||!choices.length} value={preset?.id||''} onChange={e=>{
+    const p=choices.find(v=>v.id===e.target.value);
+    setForm(current=>p?{catalogId:p.id,model:p.model+' '+p.trim,lengthMm:p.lengthMm,widthMm:p.widthMm,heightMm:p.heightMm}:{...current,catalogId:''});
+   }}><option value="">{!brand?'请先选择品牌':choices.length?'请选择车型，或直接手填':'这个品牌暂无预设，请手动填写'}</option>{choices.map(v=><option value={v.id} key={v.id}>{v.model} · {v.trim}</option>)}</select></label>
    {preset&&<p className="hint">厂商参考：{preset.lengthMm} × {preset.widthMm} × {preset.heightMm} mm。<a href={preset.sourceUrl} target="_blank" rel="noreferrer">查看厂商资料</a></p>}
    <label>车型名称<input required maxLength={100} value={form.model} onChange={e=>setForm({...form,model:e.target.value})} placeholder="例如：我的改装床车"/></label>
    <div className="vehicle-measures">{vehicleDimensions.map(({key,label,max})=><label key={key}>{label}（毫米）<input type="number" inputMode="numeric" min="500" max={max} step="1" value={form[key]} placeholder="未填写" onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}</div>
