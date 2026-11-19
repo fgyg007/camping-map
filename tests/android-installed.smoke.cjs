@@ -1,7 +1,7 @@
 const {_android}=require(process.env.CAMPING_PLAYWRIGHT || 'playwright');
 const {execFileSync}=require('node:child_process');
 const assert=require('node:assert/strict');
-const pkg='com.jlmac.campingmap.trial';
+const pkg='com.jlmac.campingmap.baidutrial';
 const component=pkg+'/com.jlmac.campingmap.MainActivity';
 const timeout=30000;
 const COLD_POINT='https://uri.amap.com/marker?position=102,25&coordinate=wgs84';
