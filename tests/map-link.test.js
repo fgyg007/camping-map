@@ -1,7 +1,20 @@
 
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {parseMapLink} from '../src/map-link.js';
+import {parseMapLink,parseBaiduSharedPoiMarker} from '../src/map-link.js';
+test('a Baidu provider marker matches the requested UID and is not labelled as a viewport',()=>{
+ const share='https://j.map.baidu.com/ab/Marker';
+ const reference='https://map.baidu.com/?newmap=1&s=inf%26uid%3DMOCK';
+ const point={uid:'MOCK',name:'合成百度地图标记',x:12958175,y:4825923};
+ const result=parseBaiduSharedPoiMarker(point,reference,share);
+ assert.equal(result.name,point.name);assert.equal(result.source,'百度地图地点标记');
+ assert.equal(result.verificationUrl,share);assert.equal(result.requiresConfirmation,undefined);
+ assert.ok(Math.abs(result.lat-39.9075)<.001);
+ assert.ok(Math.abs(result.lng-116.3914)<.001);
+ for(const bad of [{...point,uid:'Other'},{...point,x:'12958175'},{...point,y:Infinity},{...point,name:''}])
+  assert.throws(()=>parseBaiduSharedPoiMarker(bad,reference,share));
+ assert.throws(()=>parseBaiduSharedPoiMarker(point,reference,'https://maps.app.goo.gl/Fake'));
+});
 test('offline AMap mark and route with explicit datum, longitude first',()=>{
  const r=parseMapLink('https://uri.amap.com/marker?position=116.403714%2C39.910226%2Ctest&coordinate=gaode');
  assert.equal(r.source,'高德地图');assert.equal(r.datum,'gcj02');assert.ok(Math.abs(r.lat-39.908823)<1e-5);

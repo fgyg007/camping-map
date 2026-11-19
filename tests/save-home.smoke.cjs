@@ -30,12 +30,15 @@ const assert=require('node:assert/strict');
     const uidOnly=uid=>'https://map.baidu.com/?s=inf%26uid%3D'+uid;
     if(options.url.endsWith('/Delayed'))return new Promise(resolve=>{window.finishDelayedBaidu=()=>resolve({location:uidOnly('Delayed')});});
     if(options.url.endsWith('/Exact'))return Promise.resolve({location:explicit});
+    if(options.url.endsWith('/Marker'))return Promise.resolve({location:uidOnly('SyntheticMarker')});
     if(options.url.endsWith('/Approx'))return Promise.resolve({location:uidOnly('SyntheticBaidu')});
     if(options.url.includes('mmapgwh.map.qq.com'))return Promise.resolve({location:'https://apis.map.qq.com/uri/v1/marker?coord_type=1&marker='+encodeURIComponent('coord:30.2,120.2;title:合成腾讯点')});
     return Promise.resolve({location:options.url.includes('goo.gl')?'https://www.google.com/maps/search/?api=1&query=-33.2,151.1':uidOnly('Failed')});
    }
    if(method==='resolveBaiduPoiCandidate'){
     window.baiduCandidateRequests??=[];window.baiduCandidateRequests.push(options.location);
+    if(options.location.endsWith('SyntheticMarker'))
+     return Promise.resolve({point:{uid:'SyntheticMarker',name:'合成百度地点标记',x:12958175,y:4825923}});
     if(!options.location.endsWith('SyntheticBaidu'))return Promise.reject(Error('baidu_poi_candidate_unavailable'));
     return Promise.resolve({location:'https://map.baidu.com/poi/'+encodeURIComponent('合成百度候选')+'/@12958175,4825923,19z?uid=SyntheticBaidu'});
    }
@@ -106,9 +109,8 @@ const assert=require('node:assert/strict');
   const name=page.getByLabel('地点名称');
   const waitLat=value=>page.waitForFunction(value=>document.querySelector('.editor input[placeholder="30.250000"]').value===value,value);
   const googleShort='https://maps.app.goo.gl/TestPin?g_st=ic';
+  // Android IMEs may emit input/change without a ClipboardEvent.
   await shareLink.fill(googleShort);
-  assert.equal(await page.evaluate(()=>window.shortRequests?.length||0),0); // typing never makes short-link requests
-  await simulatePaste(googleShort);
   await waitLat('-33.2');
   assert.equal(await lng.inputValue(),'151.1');
   assert.equal(await name.inputValue(),''); // source has no title
@@ -119,11 +121,21 @@ const assert=require('node:assert/strict');
   assert.equal(await lat.inputValue(),'');assert.equal(await lng.inputValue(),'');assert.equal(await name.inputValue(),'');
   assert.deepEqual(await page.evaluate(()=>window.baiduCandidateRequests),['https://map.baidu.com/?s=inf%26uid%3DFailed']);
 
-  await simulatePaste('百度地图 '+explicitShort);
+  await shareLink.fill('百度地图 '+explicitShort);
   await waitLat('35.1');
   assert.equal(await lng.inputValue(),'111.2');
   assert.equal(await name.inputValue(),'合成百度明确点');
+  assert.deepEqual(await page.evaluate(()=>window.shortRequests),[
+   'https://maps.app.goo.gl/TestPin','https://j.map.baidu.com/ab/TestPoi',explicitShort,
+  ]);
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('camping-map-v1')).places.some(p=>p.name==='合成百度明确点')),false);
+  const markerShort='https://j.map.baidu.com/ab/Marker';
+  await shareLink.fill(markerShort);
+  await page.getByText(/来源：百度地图地点标记/u).waitFor();
+  assert.ok(Math.abs(Number(await lat.inputValue())-39.9075)<.001);
+  assert.ok(await lng.inputValue());
+  assert.equal(await name.inputValue(),'合成百度地点标记');
+  assert.equal(await page.getByRole('link',{name:'打开原地图链接'}).getAttribute('href'),markerShort);
   await simulatePaste(approxShort);
   await page.getByRole('status').filter({hasText:'近似点'}).waitFor();
   assert.ok(Math.abs(Number(await lat.inputValue())-39.9075)<.001);
@@ -163,8 +175,12 @@ const assert=require('node:assert/strict');
 
   await page.getByRole('button',{name:'添加地点',exact:true}).first().click();
   await page.getByText('从地图链接导入',{exact:true}).click();
-  await simulatePaste('https://j.map.baidu.com/ab/Delayed');
+  const beforeRapidChange=await page.evaluate(()=>window.shortRequests.length);
+  await shareLink.fill('https://j.map.baidu.com/ab/Skip');
+  await shareLink.fill('https://j.map.baidu.com/ab/Delayed');
   await page.waitForFunction(()=>typeof window.finishDelayedBaidu==='function');
+  assert.deepEqual(await page.evaluate(offset=>window.shortRequests.slice(offset),beforeRapidChange),
+   ['https://j.map.baidu.com/ab/Delayed']);
   const previousCandidateRequests=await page.evaluate(()=>window.baiduCandidateRequests.length);
   await shareLink.fill('https://www.google.com/maps/search/?api=1&query=-33.2,151.1');
   await waitLat('-33.2');

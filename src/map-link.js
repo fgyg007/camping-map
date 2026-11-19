@@ -88,6 +88,18 @@ export function isBaiduUidOnlyLocation(value){
  try{return isBaiduPoiReference(strictUrl(value));}catch{return false;}
 }
 
+export function parseBaiduSharedPoiMarker(value,reference,shortLink){
+ const sourceUrl=strictUrl(reference),originalLink=canonicalExternalShort(strictUrl(shortLink));
+ if(!originalLink?.startsWith('https://j.map.baidu.com/')||!isBaiduPoiReference(sourceUrl)||
+    !value||value.uid!==sourceUrl.searchParams.get('s').slice('inf&uid='.length)||
+    !Number.isFinite(value.x)||!Number.isFinite(value.y))throw rejected();
+ const name=cleanName(value.name);
+ if(!name)throw rejected();
+ const original=bd09McToBd09(value.x,value.y);
+ return {source:'百度地图地点标记',datum:'bd09',name,original,...toWgs(original.lat,original.lng,'bd09'),
+         verificationUrl:originalLink};
+}
+
 function baiduDesktopPath(url){
  return url.protocol==='https:'&&url.hostname==='map.baidu.com'&&url.pathname.startsWith('/poi/');
 }

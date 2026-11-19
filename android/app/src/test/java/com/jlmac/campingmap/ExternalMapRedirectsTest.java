@@ -93,6 +93,15 @@ public class ExternalMapRedirectsTest {
         }
     }
 
+    @Test public void detailedBaiduRouteRetainsOnlyVerifiedMobileSource() throws Exception {
+        String input = "https://j.map.baidu.com/4f/Example";
+        String mobile = "https://map.baidu.com/mobile/webapp/search/search/qt=inf&uid=SyntheticPoi/vt=map";
+        ExternalMapRedirects.Resolved expanded = ExternalMapRedirects.resolveDetailed(input, uri -> mobile);
+        assertEquals(mobile, expanded.mobilePoi);
+        assertEquals("SyntheticPoi", BaiduPoiCandidatePolicy.referenceUid(expanded.location));
+        assertEquals(null, ExternalMapRedirects.resolveDetailed(input, uri -> expanded.location).mobilePoi);
+    }
+
     @Test public void allowsOneSameProviderHopWithoutTracking() throws Exception {
         List<String> requests = new ArrayList<>();
         String url = "https://goo.gl/maps/Example";

@@ -46,7 +46,11 @@ import java.util.regex.Pattern;
 /** Temporary, read-only Baidu page. No script injection, API key or app bridge. */
 public final class BaiduPoiResolverActivity extends Activity {
     static final String EXTRA_LOCATION = "baidu_poi_candidate_location";
-    private static final String EXTRA_UID = "baidu_poi_candidate_uid";
+    static final String EXTRA_UID = "baidu_poi_candidate_uid";
+    static final String EXTRA_NAME = "baidu_poi_candidate_name";
+    static final String EXTRA_X = "baidu_poi_candidate_x";
+    static final String EXTRA_Y = "baidu_poi_candidate_y";
+    private static final String EXTRA_MOBILE_PAGE = "baidu_poi_mobile_page";
     private static final String PROCESS_SUFFIX = ":baidu_poi_resolver";
     private static final long TIMEOUT_MS = 16000;
     private static final Pattern CHROME_VERSION = Pattern.compile("Chrome/([0-9.]+)");
@@ -57,11 +61,13 @@ public final class BaiduPoiResolverActivity extends Activity {
     private String expectedUid;
     private volatile boolean finished;
 
-    static Intent createIntent(Context context, String location) {
+    static Intent createIntent(Context context, String location, String mobilePage) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null;
         String uid = BaiduPoiCandidatePolicy.referenceUid(location);
         if (uid == null) return null;
-        return new Intent(context, BaiduPoiResolverActivity.class).putExtra(EXTRA_UID, uid);
+        Intent intent = new Intent(context, BaiduPoiResolverActivity.class).putExtra(EXTRA_UID, uid);
+        if (BaiduPublicPoiPage.pageUri(mobilePage, uid) != null) intent.putExtra(EXTRA_MOBILE_PAGE, mobilePage);
+        return intent;
     }
 
     @Override protected void onCreate(Bundle savedInstanceState) {
@@ -78,6 +84,25 @@ public final class BaiduPoiResolverActivity extends Activity {
             complete(null);
             return;
         }
+        initializeStatus();
+        String mobilePage = getIntent().getStringExtra(EXTRA_MOBILE_PAGE);
+        if (mobilePage == null) {
+            beginBrowser(page);
+        } else {
+            // This process has no Capacitor plugin or ambient Java cookie handler.
+            new Thread(() -> {
+                BaiduPublicPoiPage.Point point = BaiduPublicPoiPage.fetchCandidate(mobilePage, expectedUid);
+                ui.post(() -> {
+                    if (finished) return;
+                    if (point != null) completeMarker(point);
+                    else beginBrowser(page);
+                });
+            }, "baidu-public-poi").start();
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private void beginBrowser(String page) {
         try {
             initializeBrowser();
             web.loadUrl(page);
@@ -90,7 +115,6 @@ public final class BaiduPoiResolverActivity extends Activity {
     }
 
     @RequiresApi(Build.VERSION_CODES.P)
-    @SuppressLint("SetJavaScriptEnabled") // Remote page has no app bridge, cookies or file permissions.
     private void initializeBrowser() {
         if (!configured) {
             // Must be before any android.webkit API in the dedicated process.
@@ -99,6 +123,8 @@ public final class BaiduPoiResolverActivity extends Activity {
         }
         WebView.setWebContentsDebuggingEnabled(false);
         CookieManager.getInstance().setAcceptCookie(false);
+        // Only the isolated resolver profile can see this storage, never the main app's records.
+        WebStorage.getInstance().deleteAllData();
         ServiceWorkerController workers = ServiceWorkerController.getInstance();
         workers.getServiceWorkerWebSettings().setBlockNetworkLoads(true);
         workers.getServiceWorkerWebSettings().setAllowContentAccess(false);
@@ -109,6 +135,18 @@ public final class BaiduPoiResolverActivity extends Activity {
             }
         });
 
+        web = new WebView(this);
+        layout.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
+        web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
+        web.setFocusable(false);
+        web.setFocusableInTouchMode(false);
+        web.setOnTouchListener((view, event) -> true); // view-only, never operate or sign in
+        web.setDownloadListener((url, agent, disposition, mime, size) -> complete(null));
+        CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
+        configureWebSettings();
+    }
+
+    private void initializeStatus() {
         layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setBackgroundColor(Color.WHITE);
@@ -122,23 +160,21 @@ public final class BaiduPoiResolverActivity extends Activity {
         cancel.setText(android.R.string.cancel);
         cancel.setOnClickListener(ignored -> complete(null));
         layout.addView(cancel);
-        web = new WebView(this);
-        layout.addView(web, new LinearLayout.LayoutParams(-1, 0, 1));
         setContentView(layout);
-        web.setImportantForAutofill(View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);
-        web.setFocusable(false);
-        web.setFocusableInTouchMode(false);
-        web.setOnTouchListener((view, event) -> true); // view-only, never operate or sign in
-        web.setDownloadListener((url, agent, disposition, mime, size) -> complete(null));
-        CookieManager.getInstance().setAcceptThirdPartyCookies(web, false);
+    }
 
+    @RequiresApi(Build.VERSION_CODES.P)
+    @SuppressLint("SetJavaScriptEnabled") // Remote page has no app bridge, cookies or file permissions.
+    private void configureWebSettings() {
         WebSettings settings = web.getSettings();
         // Enable the provider's own public page behavior, never inject JavaScript.
         settings.setJavaScriptEnabled(true);
         settings.setAllowContentAccess(false);
         settings.setAllowFileAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setDomStorageEnabled(false);
+        // The public map initializes its viewport using localStorage even when signed out.
+        // Clear this isolated profile before use and again on teardown; cookies stay off.
+        settings.setDomStorageEnabled(true);
         settings.setGeolocationEnabled(false);
         settings.setSupportMultipleWindows(false);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
@@ -289,6 +325,15 @@ public final class BaiduPoiResolverActivity extends Activity {
         if (finished) return;
         finished = true;
         if (point != null) setResult(RESULT_OK, new Intent().putExtra(EXTRA_LOCATION, point));
+        cleanUp();
+        finish();
+    }
+
+    private void completeMarker(BaiduPublicPoiPage.Point point) {
+        if (finished) return;
+        finished = true;
+        setResult(RESULT_OK, new Intent().putExtra(EXTRA_UID, point.uid).putExtra(EXTRA_NAME, point.name)
+            .putExtra(EXTRA_X, point.x).putExtra(EXTRA_Y, point.y));
         cleanUp();
         finish();
     }

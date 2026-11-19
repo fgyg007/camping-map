@@ -23,6 +23,16 @@ final class ExternalMapRedirects {
         String read(URI current) throws IOException;
     }
 
+    static final class Resolved {
+        final String location;
+        final String mobilePoi;
+
+        Resolved(String location, String mobilePoi) {
+            this.location = location;
+            this.mobilePoi = mobilePoi;
+        }
+    }
+
     private ExternalMapRedirects() {}
 
     /** Fixed reason codes only; never include a provider URL or exception message. */
@@ -90,6 +100,10 @@ final class ExternalMapRedirects {
     }
 
     static String resolve(String input, LocationReader reader) throws IOException {
+        return resolveDetailed(input, reader).location;
+    }
+
+    static Resolved resolveDetailed(String input, LocationReader reader) throws IOException {
         URI first = parse(input);
         String provider = shortProvider(first);
         if (provider == null) throw new IllegalArgumentException("invalid_external_map_link");
@@ -100,9 +114,10 @@ final class ExternalMapRedirects {
             URI next = parse(location);
             if ("baidu".equals(provider) && next != null) {
                 String mobileUid = BaiduPoiCandidatePolicy.mobileReferenceUid(next.toASCIIString());
-                if (mobileUid != null) return BaiduPoiCandidatePolicy.publicPage(mobileUid);
+                if (mobileUid != null) return new Resolved(
+                    BaiduPoiCandidatePolicy.publicPage(mobileUid), next.toASCIIString());
             }
-            if (terminal(next, provider)) return next.toASCIIString();
+            if (terminal(next, provider)) return new Resolved(next.toASCIIString(), null);
             if (!"tencent".equals(provider) && next != null && next.getRawQuery() != null) {
                 next = parse(next.toASCIIString().split("\\?", 2)[0]);
             }

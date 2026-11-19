@@ -23,21 +23,22 @@ public class MapSharePlugin extends Plugin {
     private String pending;
     // In-memory one-shot continuation from our own allowlisted HTTP redirect.
     // A WebView caller can't submit an arbitrary provider URL or a fabricated UID.
-    private String recentBaiduUidLocation;
+    private ExternalMapRedirects.Resolved recentBaidu;
     private long recentBaiduUidExpiry;
     private final AtomicBoolean baiduResolverOpen = new AtomicBoolean(false);
 
-    private synchronized void rememberBaiduUidLocation(String location) {
-        recentBaiduUidLocation = location;
+    private synchronized void rememberBaiduUidLocation(ExternalMapRedirects.Resolved resolved) {
+        recentBaidu = resolved;
         recentBaiduUidExpiry = SystemClock.elapsedRealtime() + 20000;
     }
 
-    private synchronized boolean consumeBaiduUidLocation(String location) {
-        boolean allowed = location != null && location.equals(recentBaiduUidLocation) &&
+    private synchronized ExternalMapRedirects.Resolved consumeBaiduUidLocation(String location) {
+        boolean allowed = recentBaidu != null && location != null && location.equals(recentBaidu.location) &&
             SystemClock.elapsedRealtime() <= recentBaiduUidExpiry;
-        recentBaiduUidLocation = null;
+        ExternalMapRedirects.Resolved result = allowed ? recentBaidu : null;
+        recentBaidu = null;
         recentBaiduUidExpiry = 0;
-        return allowed;
+        return result;
     }
 
 
@@ -145,10 +146,11 @@ public class MapSharePlugin extends Plugin {
     public void resolveExternalMapLink(PluginCall call) {
         try {
             String url = call.getString("url");
-            String location = ExternalMapRedirects.resolve(url, ExternalMapRedirects::readLocation);
+            ExternalMapRedirects.Resolved expanded = ExternalMapRedirects.resolveDetailed(url, ExternalMapRedirects::readLocation);
+            String location = expanded.location;
             if (url.startsWith("https://j.map.baidu.com/") &&
-                BaiduPoiResolverActivity.createIntent(getContext(), location) != null) {
-                rememberBaiduUidLocation(location);
+                BaiduPoiCandidatePolicy.referenceUid(location) != null) {
+                rememberBaiduUidLocation(expanded);
             }
             JSObject result = new JSObject();
             result.put("location", location);
@@ -162,11 +164,12 @@ public class MapSharePlugin extends Plugin {
     @PluginMethod
     public void resolveBaiduPoiCandidate(PluginCall call) {
         String location = call.getString("location");
-        if (!consumeBaiduUidLocation(location)) {
+        ExternalMapRedirects.Resolved expanded = consumeBaiduUidLocation(location);
+        if (expanded == null) {
             call.reject("baidu_poi_candidate_unavailable");
             return;
         }
-        Intent intent = BaiduPoiResolverActivity.createIntent(getContext(), location);
+        Intent intent = BaiduPoiResolverActivity.createIntent(getContext(), expanded.location, expanded.mobilePoi);
         if (intent == null || !baiduResolverOpen.compareAndSet(false, true)) {
             call.reject("baidu_poi_candidate_unavailable");
             return;
@@ -192,6 +195,18 @@ public class MapSharePlugin extends Plugin {
         baiduResolverOpen.set(false);
         if (call == null) return;
         Intent data = result.getData();
+        if (result.getResultCode() == Activity.RESULT_OK && data != null &&
+            data.hasExtra(BaiduPoiResolverActivity.EXTRA_X) && data.hasExtra(BaiduPoiResolverActivity.EXTRA_Y)) {
+            JSObject marker = new JSObject();
+            marker.put("uid", data.getStringExtra(BaiduPoiResolverActivity.EXTRA_UID));
+            marker.put("name", data.getStringExtra(BaiduPoiResolverActivity.EXTRA_NAME));
+            marker.put("x", data.getDoubleExtra(BaiduPoiResolverActivity.EXTRA_X, Double.NaN));
+            marker.put("y", data.getDoubleExtra(BaiduPoiResolverActivity.EXTRA_Y, Double.NaN));
+            JSObject answer = new JSObject();
+            answer.put("point", marker);
+            call.resolve(answer);
+            return;
+        }
         String location = result.getResultCode() == Activity.RESULT_OK && data != null
             ? data.getStringExtra(BaiduPoiResolverActivity.EXTRA_LOCATION) : null;
         if (location == null) {

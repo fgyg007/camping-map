@@ -14,3 +14,15 @@ test('Android private process names are parseable and the Baidu resolver guard m
     assert.match(process, /^:[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)*$/);
   }
 });
+
+test('Baidu map page storage is isolated, cleared on entry and exit, and does not enable cookies', () => {
+  const resolver = read('../android/app/src/main/java/com/jlmac/campingmap/BaiduPoiResolverActivity.java');
+  assert.match(resolver, /setDataDirectorySuffix\("baidu_poi_resolver"\)/);
+  assert.match(resolver, /setDomStorageEnabled\(true\)/);
+  assert.match(resolver, /setAcceptCookie\(false\)/);
+  assert.match(resolver, /setAcceptThirdPartyCookies\(web, false\)/);
+  assert.match(resolver, /initializeBrowser\(\)[\s\S]*setAcceptCookie\(false\);\s*(?:\/\/[^\n]*\n\s*)?WebStorage\.getInstance\(\)\.deleteAllData\(\)/);
+  assert.match(resolver, /void cleanUp\(\)[\s\S]*view\.destroy\(\);\s*WebStorage\.getInstance\(\)\.deleteAllData\(\)/);
+  assert.match(resolver, /setBlockNetworkLoads\(true\)/);
+  assert.doesNotMatch(resolver, /addJavascriptInterface\s*\(/);
+});

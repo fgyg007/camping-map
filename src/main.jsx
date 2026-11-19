@@ -9,7 +9,7 @@ import 'leaflet/dist/leaflet.css';
 import './style.css';
 import {samples,categories,statuses,facilities,validatePlace,parseBackupDocument,navigationUrl,baiduMarkerUrl,baiduCandidateMarkerUrl} from './data.js';
 import {toWgs,amapRoute,wgsToGcj} from './coordinates.js';
-import {parseMapLink,mapLinkFromText,externalMapShortFromText,parseExternalMapLocation,isBaiduUidOnlyLocation} from './map-link.js';
+import {parseMapLink,mapLinkFromText,externalMapShortFromText,parseExternalMapLocation,isBaiduUidOnlyLocation,parseBaiduSharedPoiMarker} from './map-link.js';
 import {PhotoEditor,PhotoGallery,VehicleEditor} from './preview-features.jsx';
 import {amapShortFromText,parseAmapLocation} from './amap-share.js';
 const MapShare=registerPlugin('MapShare');
@@ -38,6 +38,7 @@ async function resolveSharedPoint(value,stillCurrent){
   try{
    const resolved=await MapShare.resolveBaiduPoiCandidate({location:first});
    if(!stillCurrent())throw Error('map_import_superseded');
+   if(resolved.point)return parseBaiduSharedPoiMarker(resolved.point,first,external);
    const candidate=parseExternalMapLocation(resolved.location,external);
    if(candidate.requiresConfirmation)return candidate;
   }catch{/* A blocked, canceled or unknown result will keep the original UID-only guidance. */}
@@ -166,6 +167,7 @@ function Editor({place,onClose,onSave,saveError}){
  const [draft,setDraft]=useState({name:'',lat:'',lng:'',category:'其他',status:'待核实',notes:'',facilities:[],heightLimit:'',verifiedAt:'',photos:[],...place}),[error,setError]=useState(''),[system,setSystem]=useState('wgs84'),[link,setLink]=useState(place.shareText||''),[preview,setPreview]=useState(null),[verificationLink,setVerificationLink]=useState(''),[importError,setImportError]=useState(''),[resolving,setResolving]=useState(false),[photoBusy,setPhotoBusy]=useState(false);
  const [conflict,setConflict]=useState(false);
  const request=useRef(0),draftRef=useRef(draft),owned=useRef({name:false,coordinates:false});
+ const linkRef=useRef(link),autoRead=useRef(null),activeRead=useRef(null);
  function updateDraft(next){draftRef.current=next;setDraft(next);}
  function clearAutoImport(){
   const {name,coordinates}=owned.current;
@@ -174,6 +176,8 @@ function Editor({place,onClose,onSave,saveError}){
   if(coordinates)setSystem('wgs84');
  }
  function resetImport(){
+  clearTimeout(autoRead.current);autoRead.current=null;
+  activeRead.current=null;
   request.current++;
   clearAutoImport();
   setResolving(false);setPreview(null);setVerificationLink('');setImportError('');setConflict(false);
@@ -192,19 +196,21 @@ function Editor({place,onClose,onSave,saveError}){
   applyImported(result);
  }
  async function showLinkPreview(value){
+  if(activeRead.current===value)return;
   resetImport();
   const token=request.current;
   const stillCurrent=()=>token===request.current;
+  activeRead.current=value;
   setResolving(true);
   try{
    const result=await resolveSharedPoint(value,stillCurrent);
    if(stillCurrent())showResult(result,value);
   }catch(err){if(stillCurrent())setImportError(shareError(err));}
-  finally{if(stillCurrent())setResolving(false);}
+  finally{if(stillCurrent()){activeRead.current=null;setResolving(false);}}
  }
  useEffect(()=>{
   if(place.shareText)showLinkPreview(place.shareText);
-  return ()=>{request.current++;};
+  return ()=>{clearTimeout(autoRead.current);request.current++;};
  },[]);
  const set=(key,value)=>{
   if(key==='lat'||key==='lng')owned.current.coordinates=false;
@@ -215,18 +221,28 @@ function Editor({place,onClose,onSave,saveError}){
  const originalLink=verificationLink||(importError?mapLinkFromText(link):null);
  const originalShort=baiduShortLink(link);
  function changeLink(value){
-  if(value===link)return;
+  if(value===linkRef.current)return;
+  linkRef.current=value;
   resetImport();setLink(value);
   const candidateLink=mapLinkFromText(value);
-  if(candidateLink&&!shortMapLink(value)){
+  if(!candidateLink)return;
+  if(shortMapLink(value)){
+   if(Capacitor.getPlatform()==='android'){
+    // Android keyboards can insert clipboard text with input/change, not a paste event.
+    const token=request.current;
+    autoRead.current=setTimeout(()=>{
+     if(token===request.current&&linkRef.current===value)showLinkPreview(value);
+    },450);
+   }
+  }else{
    try{showResult(parseMapLink(candidateLink),value);}catch{/* Wait for committed paste or explicit retry to explain failure. */}
   }
  }
  function pasteLink(event){
   const value=event.clipboardData?.getData('text/plain')?.trim();
   if(!value||!mapLinkFromText(value))return;
-  // Only a committed paste, share or retry can start a network lookup; typing cannot.
   event.preventDefault();
+  linkRef.current=value;
   setLink(value);
   showLinkPreview(value);
  }
