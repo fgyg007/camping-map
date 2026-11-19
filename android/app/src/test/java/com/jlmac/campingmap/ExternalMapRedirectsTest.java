@@ -10,6 +10,23 @@ import java.util.List;
 import org.junit.Test;
 
 public class ExternalMapRedirectsTest {
+    @Test public void reportsFixedFailureStagesWithoutExceptionDetails() throws Exception {
+        assertEquals("external_map_timeout",
+            ExternalMapRedirects.failureCode(new java.net.SocketTimeoutException("private detail")));
+        assertEquals("external_map_dns",
+            ExternalMapRedirects.failureCode(new java.net.UnknownHostException("private detail")));
+        assertEquals("external_map_tls",
+            ExternalMapRedirects.failureCode(new javax.net.ssl.SSLException("private detail")));
+        assertEquals("external_map_location_unavailable",
+            ExternalMapRedirects.failureCode(new IOException("private detail")));
+        try {
+            ExternalMapRedirects.resolve("https://j.map.baidu.com/4f/Example", uri -> null);
+            fail("missing redirect must not be read as a point");
+        } catch (IOException expected) {
+            assertEquals("external_map_unrecognized_response", ExternalMapRedirects.failureCode(expected));
+        }
+    }
+
     @Test public void readsOnlyOneTerminalRoutingHeader() throws Exception {
         List<String> requests = new ArrayList<>();
         String url = "https://j.map.baidu.com/4f/Example";
@@ -30,6 +47,50 @@ public class ExternalMapRedirectsTest {
             return expanded;
         }));
         assertEquals(Arrays.asList(url), requests);
+    }
+
+    @Test public void normalizesAndroidBaiduPoiRedirectWithoutRequestingMobilePage() throws Exception {
+        String input = "https://j.map.baidu.com/4f/Example";
+        String desktop = "https://map.baidu.com/?newmap=1&s=inf%26uid%3DSyntheticPoi" +
+            "&sharecallbackflag=poiDetailPage";
+        for (String mobile : Arrays.asList(
+                "search/search/qt=inf&uid=SyntheticPoi/newmap=1&sharecallbackflag=poiDetailPage&vt=map&da_from=weixin&openna=1",
+                "place/detail/qt=inf&uid=SyntheticPoi/shareurl=1&da_from=weixin&openna=1")) {
+            List<String> requests = new ArrayList<>();
+            assertEquals(desktop, ExternalMapRedirects.resolve(input, uri -> {
+                requests.add(uri.toString());
+                return "https://map.baidu.com/mobile/webapp/" + mobile;
+            }));
+            assertEquals(Arrays.asList(input), requests);
+            assertEquals("SyntheticPoi", BaiduPoiCandidatePolicy.referenceUid(desktop));
+        }
+    }
+
+    @Test public void refusesAmbiguousMobileBaiduPoiRedirects() throws Exception {
+        String input = "https://j.map.baidu.com/4f/Example";
+        String path = "/mobile/webapp/search/search/qt=inf&uid=SyntheticPoi";
+        for (String bad : Arrays.asList(
+                "http://map.baidu.com" + path,
+                "https://map.baidu.com.bad.test" + path,
+                "https://map.baidu.com:443" + path,
+                "https://map.baidu.com" + path + "&uid=Other",
+                "https://map.baidu.com" + path + "%26uid%3DOther",
+                "https://map.baidu.com" + path + "?uid=Other",
+                "https://map.baidu.com" + path + "/openna=1&openna=0",
+                "https://map.baidu.com" + path + "/uid=Other",
+                "https://map.baidu.com" + path + "/sharegeo=12958175,4825923",
+                "https://map.baidu.com" + path + "/../other")) {
+            List<String> requests = new ArrayList<>();
+            try {
+                ExternalMapRedirects.resolve(input, uri -> {
+                    requests.add(uri.toString());
+                    return bad;
+                });
+                fail("unexpected mobile selection");
+            } catch (IOException expected) {
+                assertEquals(Arrays.asList(input), requests);
+            }
+        }
     }
 
     @Test public void allowsOneSameProviderHopWithoutTracking() throws Exception {

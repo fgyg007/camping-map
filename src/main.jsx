@@ -47,6 +47,9 @@ async function resolveSharedPoint(value,stillCurrent){
 function shareError(err){
  const code=String(err?.message||'');
  if(code.startsWith('amap_'))return '未能从高德取得明确地点，请核对网络与链接。';
+ if(code==='external_map_timeout')return '地图短链接请求超时，还没取得地点信息。';
+ if(code==='external_map_dns'||code==='external_map_tls')return '暂时无法连接地图服务，还没取得地点信息。';
+ if(code==='external_map_unrecognized_response')return '地图服务没有返回可识别的分享地址，还没取得地点信息。';
  if(/^(invalid_external_|external_|map_external_|map_link_)/.test(code))return '未能从地图链接取得明确坐标。可以打开原地图核对，再手动录入。';
  return code||'暂时无法读取这个链接。请打开原地图核对。';
 }

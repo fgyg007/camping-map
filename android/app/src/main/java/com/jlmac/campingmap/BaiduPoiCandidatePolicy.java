@@ -15,6 +15,12 @@ final class BaiduPoiCandidatePolicy {
     private static final String MAP = "map.baidu.com";
     private static final Pattern UID = Pattern.compile("[A-Za-z0-9_-]{1,128}");
     private static final Pattern REF = Pattern.compile("inf&uid=([A-Za-z0-9_-]{1,128})");
+    private static final Pattern MOBILE_REF = Pattern.compile(
+        "/mobile/webapp/(?:search/search|place/detail)/qt=inf&uid=([A-Za-z0-9_-]{1,128})(?:/([^/]+))?/?"
+    );
+    private static final Pattern MOBILE_METADATA = Pattern.compile(
+        "(newmap|sharecallbackflag|vt|da_from|openna|shareurl)=[A-Za-z0-9_-]{1,32}"
+    );
     private static final String NUMBER = "[+-]?(?:[0-9]{1,12}(?:\\.[0-9]{1,15})?|\\.[0-9]{1,15})";
     private static final Pattern POI = Pattern.compile(
         "/poi/([^/]+?)/@(" + NUMBER + "),(" + NUMBER + "),(?:[1-9]|1[0-9]|2[01])z/?"
@@ -77,6 +83,25 @@ final class BaiduPoiCandidatePolicy {
         if (nested == null) return null;
         Matcher match = REF.matcher(nested);
         return match.matches() ? match.group(1) : null;
+    }
+
+    /** The native short-link request gets a different Location for Android clients.
+     *  Treat it as an identifier only: never load that mobile URL or forward its metadata.
+     */
+    static String mobileReferenceUid(String value) {
+        URI uri = mapUri(value);
+        if (uri == null || uri.getRawQuery() != null) return null;
+        Matcher match = MOBILE_REF.matcher(uri.getRawPath());
+        if (!match.matches()) return null;
+        String metadata = match.group(2);
+        if (metadata != null) {
+            Set<String> seen = new HashSet<>();
+            for (String field : metadata.split("&", -1)) {
+                Matcher entry = MOBILE_METADATA.matcher(field);
+                if (!entry.matches() || !seen.add(entry.group(1))) return null;
+            }
+        }
+        return match.group(1);
     }
 
     static String publicPage(String uid) {

@@ -153,10 +153,8 @@ public class MapSharePlugin extends Plugin {
             JSObject result = new JSObject();
             result.put("location", location);
             call.resolve(result);
-        } catch (IllegalArgumentException ignored) {
-            call.reject("invalid_external_map_link");
-        } catch (Exception ignored) {
-            call.reject("external_map_location_unavailable");
+        } catch (Exception failure) {
+            call.reject(ExternalMapRedirects.failureCode(failure));
         }
     }
 

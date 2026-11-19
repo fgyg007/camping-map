@@ -3,6 +3,9 @@ package com.jlmac.campingmap;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.Proxy;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
+import javax.net.ssl.SSLException;
 import java.net.URI;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -21,6 +24,21 @@ final class ExternalMapRedirects {
     }
 
     private ExternalMapRedirects() {}
+
+    /** Fixed reason codes only; never include a provider URL or exception message. */
+    static String failureCode(Exception failure) {
+        if (failure instanceof IllegalArgumentException) return "invalid_external_map_link";
+        if (failure instanceof SocketTimeoutException) return "external_map_timeout";
+        if (failure instanceof UnknownHostException) return "external_map_dns";
+        if (failure instanceof SSLException) return "external_map_tls";
+        if (failure instanceof RoutingFailure) return "external_map_unrecognized_response";
+        return "external_map_location_unavailable";
+    }
+
+    private static final class RoutingFailure extends IOException {
+        private static final long serialVersionUID = 1L;
+    }
+
 
     private static URI parse(String value) {
         if (value == null || value.length() > 8192) return null;
@@ -80,6 +98,10 @@ final class ExternalMapRedirects {
             String location = reader.read(current);
             // Only absolute, provider-owned HTTPS short hops. Do not follow arbitrary destination URLs.
             URI next = parse(location);
+            if ("baidu".equals(provider) && next != null) {
+                String mobileUid = BaiduPoiCandidatePolicy.mobileReferenceUid(next.toASCIIString());
+                if (mobileUid != null) return BaiduPoiCandidatePolicy.publicPage(mobileUid);
+            }
             if (terminal(next, provider)) return next.toASCIIString();
             if (!"tencent".equals(provider) && next != null && next.getRawQuery() != null) {
                 next = parse(next.toASCIIString().split("\\?", 2)[0]);
@@ -87,7 +109,7 @@ final class ExternalMapRedirects {
             if (!provider.equals(shortProvider(next)) || next.equals(current) || next.equals(first)) break;
             current = next;
         }
-        throw new IOException("external_map_location_unavailable");
+        throw new RoutingFailure();
     }
 
     static String readLocation(URI uri) throws IOException {
