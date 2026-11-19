@@ -33,7 +33,7 @@
             android:name=".BaiduPoiResolverActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:process=":baidu-poi-resolver"
+            android:process=":baidu_poi_resolver"
             android:theme="@android:style/Theme.Material.Light.NoActionBar" />
 
         <provider

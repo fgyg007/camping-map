@@ -47,7 +47,7 @@ import java.util.regex.Pattern;
 public final class BaiduPoiResolverActivity extends Activity {
     static final String EXTRA_LOCATION = "baidu_poi_candidate_location";
     private static final String EXTRA_UID = "baidu_poi_candidate_uid";
-    private static final String PROCESS_SUFFIX = ":baidu-poi-resolver";
+    private static final String PROCESS_SUFFIX = ":baidu_poi_resolver";
     private static final long TIMEOUT_MS = 16000;
     private static final Pattern CHROME_VERSION = Pattern.compile("Chrome/([0-9.]+)");
     private static boolean configured;
