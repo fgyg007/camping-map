@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {planPlaceImport} from './place-exchange.js';
+import {planPlaceImport,previewPlaceMerges} from './place-exchange.js';
 import './place-exchange.css';
 
 function Dialog({title,onClose,children}){
@@ -47,11 +47,14 @@ export function PlaceExportDialog({places,initialIds,onClose,onExport}){
  </Dialog>;
 }
 
-function PlaceSummary({title,place}){
+function PlaceSummary({title,place,showPhotos=false}){
  if(!place)return null;
  return <div className="exchange-summary"><strong>{title}</strong><div>{place.name}</div>
   <div>{place.category} · {place.status} · {place.lat.toFixed(5)}, {place.lng.toFixed(5)}</div>
   <div>设施：{place.facilities.join('、')||'未填'}；核实日期：{place.verifiedAt||'未填'}；限高：{place.heightLimit?place.heightLimit+' 米':'未填'}；照片：{place.photos?.length||0} 张</div>
+  {showPhotos&&!!place.photos?.length&&<div className="exchange-photo-preview">
+   {place.photos.map((src,i)=><img key={src} src={src} alt={`保留照片 ${i+1}`} loading="lazy"/>)}
+  </div>}
   {place.notes&&<div className="exchange-note">备注：{place.notes}</div>}
   {place.rating&&<div>个人评分：{place.rating}/5</div>}
   {place.review&&<div className="exchange-note">个人点评：{place.review}</div>}
@@ -66,6 +69,7 @@ export function PlaceImportDialog({existing,vehicle,document,onClose,onConfirm})
   const {rating,review,createdAt,...publicFields}=p;
   return {...publicFields,favorite:false};
  }),{kind:document.kind}),[existing,document,picked,ownBackup]);
+ const mergePreviews=useMemo(()=>[...previewPlaceMerges(plan,choices).values()],[plan,choices]);
  const toggle=i=>{setChoices({});setPicked(last=>{const n=new Set(last);if(n.has(i))n.delete(i);else n.add(i);return n;});};
  return <Dialog title="预览并确认导入" onClose={onClose}>
   <p>确认前不会改动原有数据。完全相同的地点跳过；可能是同一地点但信息不同时，默认保留本机，可查看差异再选择。</p>
@@ -83,8 +87,11 @@ export function PlaceImportDialog({existing,vehicle,document,onClose,onConfirm})
    <label>处理「{conflict.incoming.name}」<select value={choices[conflict.key]??'keep'} onChange={e=>setChoices({...choices,[conflict.key]:e.target.value})}>
     <option value="keep">保留本机，跳过这条</option>{conflict.canMerge&&<option value="merge">合并，以本机信息优先</option>}<option value="separate">不是同一处，另存为新地点</option>
    </select></label>
-   {choices[conflict.key]==='merge'&&<PlaceSummary title="合并后预览" place={conflict.merged}/>}
   </details>)}
+  {!!mergePreviews.length&&<section className="exchange-conflict" aria-labelledby="exchange-merge-heading">
+   <h3 id="exchange-merge-heading">合并后预览</h3>
+   {mergePreviews.map(place=><PlaceSummary key={place.id} title={place.name} place={place} showPhotos/>)}
+  </section>}
   <p className="hint">本机坐标、评分、点评和其他已填内容优先。空项可补，设施和照片去重合并（最多 3 张）。多条记录合并到一处时，按文件顺序补缺。</p>
   {!document.kind&&<label className="checkbox"><input type="checkbox" checked={ownBackup} onChange={e=>{setOwnBackup(e.target.checked);setRestoreVehicle(false);setChoices({});}}/>这是我自己的备份，恢复新地点的个人点评和收藏</label>}
   {ownBackup&&!vehicle&&document.vehicle&&<label className="checkbox"><input type="checkbox" checked={restoreVehicle} onChange={e=>setRestoreVehicle(e.target.checked)}/>同时恢复备份中的车辆资料</label>}

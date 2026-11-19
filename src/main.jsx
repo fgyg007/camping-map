@@ -127,7 +127,7 @@ function App(){
    const nextVehicle=vehicle||(restoreVehicle?exchange.document.vehicle:null);
    if((result.added||result.merged||nextVehicle!==vehicle)&&!save(result.places,{nextVehicle}))return;
    setExchange(null);
-   message('已新增 '+result.added+' 处、合并 '+result.merged+' 处、跳过 '+result.skipped+' 处'+(nextVehicle!==vehicle?'，已恢复车辆':''));
+   message('已新增 '+result.added+' 处、合并 '+result.merged+' 条、跳过 '+result.skipped+' 条'+(nextVehicle!==vehicle?'，已恢复车辆':''));
   }catch(e){message('导入失败：'+(e.message||'请重试'));}
  }
  return <div className="app">

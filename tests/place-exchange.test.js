@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 import {parseBackupDocument} from '../src/data.js';
-import {makeSelectedExport,parsePlaceImportDocument,planPlaceImport,applyPlaceImport} from '../src/place-exchange.js';
+import {makeSelectedExport,parsePlaceImportDocument,planPlaceImport,previewPlaceMerges,applyPlaceImport} from '../src/place-exchange.js';
 
 const photo=i=>'data:image/jpeg;base64,/9j/A'+i+'A=';
 const place=(id,changes={})=>({id,name:'合成地点 A',lat:30,lng:110,category:'湖畔',status:'待核实',facilities:[],notes:'',heightLimit:'',verifiedAt:'',demo:false,favorite:false,...changes});
@@ -46,7 +46,7 @@ test('staged import is immutable, keeps existing by default, and merges non-dest
  assert.deepEqual(applyPlaceImport(plan),{places:[stored,newPlace],added:1,merged:0,skipped:1});
  const chosen=applyPlaceImport(plan,{[c.key]:'merge'});
  assert.deepEqual(chosen.places[0],{...stored,heightLimit:2,facilities:['厕所','水源'],photos:[photo(1),photo(2),photo(3)]});
- assert.deepEqual(c.merged,chosen.places[0]);
+ assert.deepEqual(previewPlaceMerges(plan,{[c.key]:'merge'}).get(stored.id),chosen.places[0]);
  assert.equal(chosen.merged,1);assert.equal(chosen.added,1);assert.equal(chosen.skipped,0);
  assert.equal(base[0].heightLimit,'');
 });
@@ -105,4 +105,26 @@ test('different names at the same pin are shown as a possible conflict, never si
  assert.equal(plan.conflicts[0].reason,'same-pin');
  assert.deepEqual(applyPlaceImport(plan).places,[stored]);
  assert.deepEqual(applyPlaceImport(plan,{0:'separate'}).places,[stored,incoming]);
+});
+
+test('preview shows one final result per place, reflecting choice changes and file order',()=>{
+ const stored=place('local',{photos:[photo(1),photo(2)],rating:4,review:'不覆盖'});
+ const a=place('friend-a',{heightLimit:2,photos:[photo(3)],facilities:['厕所']});
+ const b=place('friend-b',{heightLimit:3,photos:[photo(4)],facilities:['水源']});
+ for(const [first,second] of [[a,b],[b,a]]){
+  const plan=planPlaceImport([stored],[first,second]);
+  const both={0:'merge',1:'merge'},secondOnly={0:'separate',1:'merge'};
+  assert.equal(previewPlaceMerges(plan).size,0);
+  const finalPreview=previewPlaceMerges(plan,both);
+  assert.equal(finalPreview.size,1);
+  assert.deepEqual(finalPreview.get(stored.id),{
+   ...stored,heightLimit:first.heightLimit,photos:[...stored.photos,...first.photos],
+   facilities:[...first.facilities,...second.facilities],
+  });
+  assert.deepEqual(applyPlaceImport(plan,both).places,[...finalPreview.values()]);
+  const changedPreview=previewPlaceMerges(plan,secondOnly).get(stored.id);
+  assert.deepEqual(changedPreview,{...stored,heightLimit:second.heightLimit,photos:[...stored.photos,...second.photos],facilities:second.facilities});
+  assert.deepEqual(applyPlaceImport(plan,secondOnly).places,[changedPreview,first]);
+  assert.equal(stored.heightLimit,'');
+ }
 });

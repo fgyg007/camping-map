@@ -40,6 +40,7 @@ module.exports=async function exchangeSmoke(browser,device){
   await opened.getByRole('button',{name:'关闭详情'}).click();
 
   const incoming=[place('friend-a',local.name,30.0002,{rating:1,review:'朋友个人评价',facilities:['水源'],notes:'来访者的备注',heightLimit:2}),
+   place('friend-alt',local.name,30.0003,{heightLimit:3}),
    place('friend-b','朋友新地点',32,{rating:1,review:'朋友个人短评'}),
    place('friend-c','不导入的地点',33)];
   const file=page.locator('input[type=file][accept=".json,application/json"]');
@@ -52,10 +53,20 @@ module.exports=async function exchangeSmoke(browser,device){
   assert.equal((await stored()).length,2);
   await setFile();await importDialog.getByText(/选择导入地点/u).click();
   await importDialog.getByRole('checkbox',{name:'不导入的地点'}).uncheck();
-  const choice=importDialog.getByRole('combobox',{name:'处理「'+local.name+'」'});
-  assert.equal(await choice.inputValue(),'keep');
-  await choice.selectOption('merge');
-  await importDialog.getByText('合并后预览',{exact:true}).waitFor();
+  const conflicts=importDialog.locator('details.exchange-conflict');
+  await conflicts.nth(0).locator('summary').click();
+  await conflicts.nth(1).locator('summary').click();
+  const first=conflicts.nth(0).getByRole('combobox'),second=conflicts.nth(1).getByRole('combobox');
+  const preview=importDialog.getByRole('region',{name:'合并后预览'});
+  assert.equal(await first.inputValue(),'keep');
+  assert.equal(await second.inputValue(),'keep');
+  await second.selectOption('merge');
+  await preview.getByText(/限高：3 米/u).waitFor();
+  await first.selectOption('merge');
+  await preview.getByText(/限高：2 米/u).waitFor();
+  assert.equal(await preview.locator('.exchange-summary').count(),1);
+  assert.equal(await preview.getByText(/限高：3 米/u).count(),0);
+  assert.equal(Boolean((await stored()).find(p=>p.id===local.id).heightLimit),false);
   await importDialog.getByRole('button',{name:'确认导入'}).click();
   await importDialog.waitFor({state:'hidden'});
   const after=await stored(),kept=after.find(p=>p.id===local.id),fresh=after.find(p=>p.id==='friend-b');

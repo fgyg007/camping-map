@@ -96,20 +96,33 @@ export function planPlaceImport(existing,incoming,{kind}={}){
   const canMerge=candidates.length===1&&(target.demo===true)===(p.demo===true)&&near(target,p);
   const reason=candidates.length>1?'ambiguous':!canMerge?'id-collision':sameId?'same-id':similar.length?'nearby-name':'same-pin';
   conflicts.push({key:String(conflicts.length),existing:target,incoming:p,
-   merged:canMerge?mergePlaces(target,p):null,reason,canMerge,keeps:target,
+   reason,canMerge,keeps:target,
    differences:diff(target,p,kind),candidates});
  }
  return {existing,additions,conflicts,duplicates};
 }
 
+const importChoice=(conflict,choices)=>Object.hasOwn(choices,conflict.key)?choices[conflict.key]:'keep';
+const isMerge=(conflict,choices)=>conflict.canMerge&&importChoice(conflict,choices)==='merge';
+
+// One final record per destination, using exactly the same file order for preview and save.
+export function previewPlaceMerges(plan,choices={}){
+ const byId=new Map();
+ for(const conflict of plan.conflicts){
+  if(!isMerge(conflict,choices))continue;
+  const local=conflict.existing;
+  byId.set(local.id,mergePlaces(byId.get(local.id)??local,conflict.incoming));
+ }
+ return byId;
+}
+
 export function applyPlaceImport(plan,choices={}, {createId=makePlaceId}={}){
  const byId=new Map([...plan.existing,...plan.additions].map(p=>[p.id,p]));
+ for(const [id,place] of previewPlaceMerges(plan,choices))byId.set(id,place);
  let added=plan.additions.length,merged=0,skipped=plan.duplicates;
  for(const conflict of plan.conflicts){
-  const choice=Object.hasOwn(choices,conflict.key)?choices[conflict.key]:'keep';
-  if(choice==='merge'&&conflict.canMerge){
-   const id=conflict.existing.id;
-   byId.set(id,mergePlaces(byId.get(id),conflict.incoming));
+  const choice=importChoice(conflict,choices);
+  if(isMerge(conflict,choices)){
    merged++;
   }else if(choice==='separate'){
    let id=conflict.incoming.id;
