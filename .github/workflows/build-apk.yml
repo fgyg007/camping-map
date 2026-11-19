@@ -51,7 +51,7 @@ jobs:
       - name: Collect verified APK
         run: |
           mkdir -p artifacts
-          name=camping-map-debug.apk
+          name=Yebo-0.1.2-trial.apk
           cp android/app/build/outputs/apk/debug/app-debug.apk "artifacts/$name"
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "artifacts/$name" > artifacts/signature-verification.txt
           aapt="$ANDROID_HOME/build-tools/36.0.0/aapt2"
@@ -59,7 +59,11 @@ jobs:
           code="$(awk '/^[[:space:]]*versionCode [0-9]+$/ { print $2 }' android/app/build.gradle)"
           version="$(awk -F'"' '/^[[:space:]]*versionName "[0-9.]+"/ { print $2 }' android/app/build.gradle)"
           test -n "$code" && test -n "$version"
-          grep -Fq "package: name='com.jlmac.campingmap' versionCode='$code' versionName='$version'" artifacts/apk-metadata.txt
+          grep -Fq "package: name='com.jlmac.campingmap.trial' versionCode='$code' versionName='$version'" artifacts/apk-metadata.txt
+          grep -Fxq "application-label:'野泊测试版'" artifacts/apk-metadata.txt
+          grep -Fq "launchable-activity: name='com.jlmac.campingmap.MainActivity'" artifacts/apk-metadata.txt
+          "$aapt" dump xmltree "artifacts/$name" --file AndroidManifest.xml > "$RUNNER_TEMP/camping-manifest.txt"
+          grep -Fq 'com.jlmac.campingmap.trial.fileprovider' "$RUNNER_TEMP/camping-manifest.txt"
           "$aapt" dump resources "artifacts/$name" > "$RUNNER_TEMP/camping-resources.txt"
           grep -E '(mipmap/ic_launcher|drawable/ic_launcher_monochrome)' "$RUNNER_TEMP/camping-resources.txt" > artifacts/launcher-resources.txt
           grep -q 'mipmap/ic_launcher_round' artifacts/launcher-resources.txt
@@ -68,7 +72,7 @@ jobs:
           sha256sum "$name" > SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: camping-map-android-debug
+          name: yebo-android-trial
           path: artifacts/
           if-no-files-found: error
           retention-days: 30

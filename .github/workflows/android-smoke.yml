@@ -23,7 +23,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           # No run-id/token: download the APK produced by this exact caller run.
-          name: camping-map-android-debug
+          name: yebo-android-trial
           path: smoke-apk
       - name: Verify artifact and exercise the installed APK offline
         shell: bash
@@ -63,7 +63,8 @@ jobs:
           adb shell svc wifi disable
           adb shell svc data disable
           test "$(adb shell settings get global airplane_mode_on | tr -d '\r')" = 1
-          adb install smoke-apk/camping-map-debug.apk
+          apk="$(awk '{print $2}' smoke-apk/SHA256SUMS.txt)"
+          adb install "smoke-apk/$apk"
           tool_dir="$RUNNER_TEMP/camping-android-tool"
           npm install --prefix "$tool_dir" --no-audit --no-fund --no-package-lock playwright@1.65.1
           CAMPING_PLAYWRIGHT="$tool_dir/node_modules/playwright" node tests/android-installed.smoke.cjs
