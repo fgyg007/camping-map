@@ -137,7 +137,11 @@ module.exports=async function trialFeatures(browser,device){
    const restore=await restoreContext.newPage();
    restore.on('pageerror',e=>errors.push(e.message));
    await restore.goto(origin);
-   await restore.locator('.panel-footer input[type=file]').setInputFiles({name:'backup.json',mimeType:'application/json',buffer:bytes});
+   await restore.locator('input[type=file][accept=".json,application/json"]').setInputFiles({name:'backup.json',mimeType:'application/json',buffer:bytes});
+   const importDialog=restore.getByRole('dialog',{name:'预览并确认导入'});
+   await importDialog.getByRole('checkbox',{name:/这是我自己的备份/}).check();
+   await importDialog.getByRole('checkbox',{name:'同时恢复备份中的车辆资料'}).check();
+   await importDialog.getByRole('button',{name:'确认导入'}).click();
    await restore.getByRole('status').filter({hasText:'已恢复车辆'}).waitFor();
    await restore.reload();
    await restore.locator('.cards').getByText('合成营地相册',{exact:true}).click();

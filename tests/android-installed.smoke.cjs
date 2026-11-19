@@ -34,8 +34,8 @@ const adb=(serial,...args)=>execFileSync('adb',['-s',serial,...args],{stdio:'pip
   const page=await openPage();
   await pendingShare(page).waitFor({timeout});
   assert.equal(await page.evaluate(()=>window.Capacitor.getPlatform()),'android');
-  assert.equal(await page.getByRole('button',{name:'地图视图'}).count(),0);
-  assert.equal(await page.locator('.map-wrap').count(),0);
+  assert.equal(await page.getByRole('button',{name:'地图总览',exact:true}).count(),1);
+  assert.equal(await page.locator('.place-overview-canvas').count(),0);
 
   // Saving from a filtered home must reveal the new record immediately.
   await page.locator('.filter').click({timeout});
@@ -56,7 +56,7 @@ const adb=(serial,...args)=>execFileSync('adb',['-s',serial,...args],{stdio:'pip
   await page.getByRole('button',{name:'保存地点'}).click();
   await card(page,'安卓冷启动合成地点').waitFor({state:'visible',timeout});
   assert.equal(await dialog(page).count(),0);
-  assert.equal(await page.locator('.map-wrap, .camp-marker').count(),0);
+  assert.equal(await page.locator('.place-overview-canvas, .place-overview-pin').count(),0);
   assert.equal(await page.getByRole('textbox',{name:'搜索地点'}).inputValue(),'');
 
   // The pending warm intent is now importable with its original coordinates.
@@ -74,7 +74,7 @@ const adb=(serial,...args)=>execFileSync('adb',['-s',serial,...args],{stdio:'pip
   const restored=await openPage();
   await card(restored,'安卓冷启动合成地点').waitFor({state:'visible',timeout});
   await card(restored,'安卓热启动合成地点').waitFor({state:'visible',timeout});
-  assert.equal(await restored.locator('.map-wrap').count(),0);
+  assert.equal(await restored.locator('.place-overview-canvas').count(),0);
   assert.equal(await pendingShare(restored).count(),0);
   console.log('Installed APK passed offline Android list, targeted cold/warm ACTION_SEND, editing protection, immediate save and force-stop/relaunch.');
  }finally{

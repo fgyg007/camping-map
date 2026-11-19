@@ -1,0 +1,14 @@
+.exchange-overlay{z-index:1100}.exchange{width:min(620px,100%)}.exchange>p{color:#526b58;font-size:13px;line-height:1.6}
+.exchange-options{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0}
+.exchange-options button{padding:6px 10px;border:1px solid #d2dfd1;border-radius:6px}
+.exchange-records{max-height:36dvh;overflow:auto;margin:8px 0 14px;padding:3px}
+.exchange label.checkbox{font-size:14px;margin:0 0 10px;min-height:30px}
+.exchange .checkbox input{width:18px;flex-shrink:0;margin-right:5px}
+.exchange label span,.exchange-note{overflow-wrap:anywhere;white-space:pre-wrap}
+.exchange-conflict,.exchange-picker{padding:10px;background:#f1f5ed;border:1px solid #d2dfd1;border-radius:8px;margin-bottom:8px}
+.exchange-conflict summary,.exchange-picker summary{cursor:pointer;font-weight:600}
+.exchange-comparison{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.exchange-summary{background:#fff8;padding:8px;font-size:12px;line-height:1.7;min-width:0;overflow-wrap:anywhere}
+.exchange-conflict label{margin:10px 0 3px;font-size:13px}
+.exchange button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:650px){.exchange-comparison{grid-template-columns:1fr}.exchange{padding:22px 16px}.detail-actions{flex-wrap:wrap;gap:7px}}

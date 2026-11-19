@@ -1,0 +1,17 @@
+.place-overview{grid-column:1/-1;min-width:0;min-height:0;border:1px solid #e0e4d8;border-radius:14px;background:#fbfcf7;padding:14px;display:flex;flex-direction:column;gap:10px;overflow:auto}
+.place-overview-heading,.place-overview-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.place-overview-heading h2{margin:0 0 4px}.place-overview-heading p,.place-overview-hint{margin:0;color:#586b58;font-size:11px;line-height:1.6}
+.place-overview-heading button,.place-overview-actions button,.place-overview-nearby>button{border:1px solid #dde6d5;border-radius:8px;padding:7px 10px;background:#eef2e9;min-height:36px}
+.place-overview-frame{flex:1;position:relative;min-height:clamp(235px,46vh,460px);border:1px solid #d9e2d3;overflow:hidden;border-radius:10px}
+.place-overview-canvas{position:absolute;inset:0;isolation:isolate;background-color:#e6ece0;background-image:linear-gradient(#cad8c680 1px,transparent 1px),linear-gradient(90deg,#cad8c680 1px,transparent 1px);background-size:32px 32px;z-index:0}
+.place-overview-mode{position:absolute;z-index:1;left:10px;top:10px;background:#fffffff2;padding:6px 8px;border-radius:6px;color:#4e6656;font-size:11px;pointer-events:none}
+.place-overview-pin{display:grid;justify-content:center;align-items:start;background:none;border:0}
+.place-overview-pin span{height:27px;min-width:27px;display:grid;place-items:center;border:2px solid #fff;border-radius:50%;background:#28543e;color:#fff;font-size:12px;font-weight:700;box-shadow:0 2px 6px #19331c50;padding:0 3px}
+.place-overview-pin:after{content:'';position:absolute;left:calc(50% - 6px);top:22px;width:0;height:0;border:6px solid transparent;border-top:9px solid #28543e}
+.place-overview-pin:focus-visible{outline:3px solid #987132;outline-offset:2px}
+.place-overview-directory,.place-overview-nearby{margin:0;font-size:12px}
+.place-overview-directory summary{cursor:pointer;padding:8px 2px;color:#315a43}.place-overview-nearby h3{margin:0 0 8px}
+.place-overview-directory>div,.place-overview-nearby>div{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:7px}
+.place-overview-directory button,.place-overview-nearby>div button{padding:7px 9px;min-height:36px;border-radius:7px;background:#eef2e9;text-align:left;overflow-wrap:anywhere}
+.place-overview-empty{margin:auto;text-align:center;padding:34px 12px;color:#586b58}
+@media(max-width:600px){.place-overview{padding:10px;gap:8px}.place-overview-frame{min-height:clamp(235px,45dvh,365px)}}

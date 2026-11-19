@@ -3,6 +3,7 @@ import {validateVehicle} from './vehicle.js';
 export const categories = ['湖畔','山野','海边','服务区','其他'];
 export const statuses = ['待核实','开放','关闭'];
 export const facilities = ['厕所','水源','供电','垃圾点'];
+export const PLACE_REVIEW_MAX = 280;
 export const samples = [
  {id:'demo-1',name:'湖畔的一个清晨',lat:30.22,lng:120.10,category:'湖畔',status:'待核实',notes:'演示地点，展示湖畔营地的记录方式。位置、设施和通行情况均未实测，请勿据此出行。',facilities:['厕所','水源'],favorite:false,demo:true,verifiedAt:''},
  {id:'demo-2',name:'山间松林停车点',lat:30.57,lng:119.91,category:'山野',status:'待核实',notes:'演示地点。可记录入口路况、驻车环境和限高信息，出行前请自行核实。',facilities:[],favorite:true,demo:true,verifiedAt:''},
@@ -22,10 +23,20 @@ export function validatePlace(p) {
  if(!categories.includes(p.category)||!statuses.includes(p.status)) throw Error('地点分类或状态无效');
  if(!Array.isArray(p.facilities)||p.facilities.some(x=>!facilities.includes(x))) throw Error('设施信息无效');
  if(p.notes!=null && (typeof p.notes!=='string'||p.notes.length>2000)) throw Error('备注最多 2000 字');
+ if(p.rating!=null&&p.rating!==''&&(!Number.isInteger(p.rating)||p.rating<1||p.rating>5))throw Error('我的评分应为 1–5 分，或留空');
+ if(p.review!=null&&(typeof p.review!=='string'||p.review.length>PLACE_REVIEW_MAX))throw Error(`我的短评最多 ${PLACE_REVIEW_MAX} 字`);
+ let createdAt;
+ if(p.createdAt!=null&&p.createdAt!==''){
+  if(typeof p.createdAt!=='string'||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(p.createdAt))throw Error('添加日期格式无效');
+  const date=new Date(p.createdAt),expected=p.createdAt.length===20?p.createdAt.replace('Z','.000Z'):p.createdAt;
+  if(!Number.isFinite(date.valueOf())||date.toISOString()!==expected)throw Error('添加日期无效');
+  createdAt=expected;
+ }
  if(p.heightLimit!=='' && p.heightLimit!=null && (!Number.isFinite(Number(p.heightLimit))||Number(p.heightLimit)<=0||Number(p.heightLimit)>10)) throw Error('限高应大于 0 且不超过 10 米');
  if(p.verifiedAt && !/^\d{4}-\d{2}-\d{2}$/.test(p.verifiedAt)) throw Error('核实日期格式无效');
  const photos=validatePhotos(p.photos);
- return {id:typeof p.id==='string'?p.id:makePlaceId(),name:p.name.trim(),lat:Number(p.lat),lng:Number(p.lng),category:p.category,status:p.status,facilities:[...p.facilities],notes:p.notes||'',heightLimit:p.heightLimit ? Number(p.heightLimit):'',verifiedAt:p.verifiedAt||'',favorite:p.favorite===true,demo:p.demo===true,...(photos.length?{photos}:{})};
+ const review=p.review?.trim();
+ return {id:typeof p.id==='string'?p.id:makePlaceId(),name:p.name.trim(),lat:Number(p.lat),lng:Number(p.lng),category:p.category,status:p.status,facilities:[...p.facilities],notes:p.notes||'',heightLimit:p.heightLimit ? Number(p.heightLimit):'',verifiedAt:p.verifiedAt||'',favorite:p.favorite===true,demo:p.demo===true,...(photos.length?{photos}:{}),...(p.rating?{rating:p.rating}:{}),...(review?{review}:{}),...(createdAt?{createdAt}:{})};
 }
 export function parseBackupDocument(text) {
  const data=JSON.parse(text);

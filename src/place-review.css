@@ -1,0 +1,11 @@
+.place-review-editor{border:1px solid #e4e8dc;border-radius:8px;margin:0 0 14px;padding:10px 12px 0}
+.place-review-editor h3{font-size:13px;margin:0;color:#35533b}
+.place-review-editor small{color:#64715e;font-size:10px;font-weight:400;margin-left:5px}
+.place-review-editor .hint{color:#64715e;margin-bottom:10px}
+.place-rating{display:flex;gap:8px;align-items:center;margin:0 0 8px}
+.place-rating-detail{align-items:flex-start;flex-direction:column;margin:0 0 14px}
+.place-rating-score{background:#f4eedc;color:#745736;border-radius:5px;padding:3px 8px;font-size:11px;white-space:nowrap}
+.place-review-copy strong{font-size:12px;color:#405b43}
+.place-review-copy .notes{margin:3px 0}
+.place-sort{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap;font-size:11px;color:#405b43}
+.place-sort select{border:1px solid #e2e4da;border-radius:7px;padding:7px;min-width:0;background:#fff;color:#405b43}
