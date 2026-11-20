@@ -214,6 +214,7 @@ const assert=require('node:assert/strict');
   await require('./place-exchange.smoke.cjs')(b,devices['Pixel 7']);
   await require('./place-detail.smoke.cjs')(b,devices['Pixel 7']);
   await require('./place-visits.smoke.cjs')(b,devices['Pixel 7']);
+  await require('./place-visit-layout.smoke.cjs')(b,devices['Pixel 7']);
   await require('./place-private-review.smoke.cjs')(b,devices['Pixel 7']);
   const preview=require('./trial-features.smoke.cjs');
   await preview(b,devices['Pixel 7']);

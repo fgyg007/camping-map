@@ -44,14 +44,15 @@ export function finalizeVisit(draft){
 }
 export function VisitFields({draft,onChange,busy,onBusy,inline=false}){
  const updateVehicle=(k,v)=>onChange('vehicle',{...draft.vehicle,[k]:v});
+ const dims=<div className="visit-dims">{compareDimensions.map(({key,label})=><label key={key}>{label}（毫米）<input inputMode="numeric" value={draft.vehicle[key]??''} onChange={e=>updateVehicle(key,e.target.value)}/></label>)}</div>;
  return <>
-  <p className="hint">{inline?'去过就填写；只是收藏地点的话可留空，不会生成实测。已设置「我的车辆」时会带入，可改成当天实际开的车。':'填的是当天开的车，日后换车不会改动这条记录。'}</p>
+  <p className="hint">{inline?'去过再填。只收藏地点可以留空。':'填的是当天开的车，日后换车不会改动这条记录。'}</p>
   <label>开到了哪里<select required={!inline} value={draft.outcome} onChange={e=>onChange('outcome',e.target.value)}><option value="">{inline?'请选择到达情况':'请选择'}</option>{Array.from(new Set([...visitOutcomes,...(draft.outcome?[draft.outcome]:[])])).map(x=><option key={x}>{x}</option>)}</select></label>
-  <div className="form-row">
+  <div className={inline?"first-visit-identity":"form-row"}>
    <label>实测日期<input type="date" required={!inline||Boolean(draft.outcome)} value={draft.date} onChange={e=>onChange('date',e.target.value)}/></label>
-   <label>当时的车型<input maxLength="100" required={!inline||Boolean(draft.outcome)} value={draft.vehicle.model} onChange={e=>updateVehicle('model',e.target.value)}/></label>
+   <label>当时的车型<input maxLength="100" required={!inline||Boolean(draft.outcome)} value={draft.vehicle.model} placeholder={inline?'实际驾驶的车型':undefined} onChange={e=>updateVehicle('model',e.target.value)}/></label>
   </div>
-  <div className="visit-dims">{compareDimensions.map(({key,label})=><label key={key}>{label}（毫米）<input inputMode="numeric" value={draft.vehicle[key]??''} onChange={e=>updateVehicle(key,e.target.value)}/></label>)}</div>
+  {inline?<details className="visit-dimensions-details"><summary>车辆尺寸（可选）</summary><p className="hint">已设置「我的车辆」时会预填，可按当时开的车修改。</p>{dims}</details>:dims}
   <label>入口或路线（可选）<input maxLength="160" value={draft.approach} onChange={e=>onChange('approach',e.target.value)}/></label>
   <label>天气及路况（可选）<input maxLength="160" value={draft.conditions} onChange={e=>onChange('conditions',e.target.value)}/></label>
   <label>实测感受（可选）<textarea maxLength="1000" value={draft.notes} onChange={e=>onChange('notes',e.target.value)} placeholder="例如：停车方便，但晚上有点吵。"/></label>
