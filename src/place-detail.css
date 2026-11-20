@@ -12,6 +12,17 @@
 .detail-pager-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:#fbfcf7;touch-action:pan-y pinch-zoom}
 .detail-pager-page{padding:17px 20px 24px}
 .detail-pager-page:focus-visible{outline:2px solid #c2a469;outline-offset:-3px}
+.detail-review{margin:16px 0;padding:12px;border:1px solid #dce7d9;border-radius:10px;background:#f2f6ef}
+.detail-review h3{font-size:14px;margin:0 0 6px;color:#35533f}
+.detail-review h3 small{font-size:10px;font-weight:500;margin-left:4px;color:#526857}
+.detail-review .hint{color:#546f5b}
+.detail-review-open,.detail-review-controls button:not(.primary){background:#e5eee2;border-radius:7px;padding:7px 11px;min-height:36px}
+.detail-review .place-review-editor{margin:0;border:0;padding:0;background:none}
+.detail-review .place-review-editor label{display:grid;gap:5px;margin:0 0 9px;color:#405e47;font-size:12px}
+.detail-review .place-review-editor :is(select,textarea){width:100%;border:1px solid #cad9c6;border-radius:7px;background:#fff;padding:8px;color:#263b30}
+.detail-review .place-review-editor textarea{resize:vertical}
+.detail-review-controls{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+.detail-review-controls .primary{padding:7px 11px;min-height:36px}
 .detail-pager-footer{flex:none;display:grid;grid-template-columns:1fr 1.05fr 1fr;gap:7px;padding:10px 14px max(10px,env(safe-area-inset-bottom));border-top:1px solid #dfe7da;background:#fbfcf7}
 .detail-pager-step,.primary.detail-pager-close{min-height:45px;min-width:0;padding:7px 5px;white-space:normal;line-height:1.15;text-align:center;border-radius:8px;font-size:12px;gap:4px}
 .detail-pager-step{background:#eaf0e7;color:#335340;border:1px solid #dce6d9}

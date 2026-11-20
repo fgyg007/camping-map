@@ -15,6 +15,30 @@ module.exports=async function visitSmoke(browser,device){
   const card=page.locator('.cards').getByText(place.name,{exact:true});
   const open=async()=>{await card.click();await page.getByRole('tab',{name:'车友实测'}).click();};
   await open();
+  await page.getByRole('button',{name:'关闭详情'}).click();
+  await page.getByRole('button',{name:'添加地点',exact:true}).first().click();
+  const firstEditor=page.getByRole('dialog',{name:'添加地点'});
+  await firstEditor.getByLabel('地点名称').fill('首次实测合成点');
+  await firstEditor.getByLabel('纬度',{exact:true}).fill('28');
+  await firstEditor.getByLabel('经度',{exact:true}).fill('110');
+  assert.equal(await firstEditor.getByLabel('当时的车型').inputValue(),vehicle.model);
+  await firstEditor.getByLabel('实测感受（可选）').fill('抵达后感觉很安静');
+  await firstEditor.getByRole('button',{name:'保存地点'}).click();
+  await firstEditor.getByRole('alert').filter({hasText:'请选择这次开到了哪里'}).waitFor();
+  await firstEditor.getByLabel('开到了哪里').selectOption('到达营位');
+  await firstEditor.getByRole('button',{name:'保存地点'}).click();
+  await firstEditor.waitFor({state:'hidden'});
+  const firstCard=page.locator('.cards').getByText('首次实测合成点',{exact:true});
+  await firstCard.click();
+  await page.getByRole('tab',{name:'车友实测'}).click();
+  await page.getByText('我的实测',{exact:true}).waitFor();
+  const first=await page.evaluate(()=>JSON.parse(localStorage.getItem('camping-map-v1')).places.find(p=>p.name==='首次实测合成点'));
+  assert.equal(first.visitReports.length,1);
+  assert.equal(first.visitReports[0].notes,'抵达后感觉很安静');
+  assert.equal(first.visitReports[0].source,'self');
+  assert.equal(first.rating,undefined);
+  await page.getByRole('button',{name:'关闭详情'}).click();
+  await open();
   await page.getByRole('button',{name:'添加实测'}).click();
   await page.getByLabel('开到了哪里').selectOption('途中掉头');
   await page.getByLabel('入口或路线（可选）').fill('东入口窄弯');
@@ -34,7 +58,7 @@ module.exports=async function visitSmoke(browser,device){
   assert.equal(await importDialog.count(),0);
   await setFrom('导入车友地点');
   await importDialog.waitFor();
-  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('camping-map-v1')).places[0].visitReports.length),1);
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('camping-map-v1')).places.find(p=>p.id==='synthetic-trip').visitReports.length),1);
   await importDialog.getByRole('button',{name:'取消',exact:true}).click();
   await input.setInputFiles(file);
   await importDialog.getByRole('button',{name:'确认导入'}).click();
@@ -53,10 +77,11 @@ module.exports=async function visitSmoke(browser,device){
   await importDialog.getByRole('button',{name:'确认导入'}).click();
   await importDialog.waitFor({state:'hidden'});
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('camping-map-v1')));
-  assert.equal(saved.places.length,1);
-  assert.equal(saved.places[0].visitReports.length,2);
-  assert.equal(saved.places[0].notes,place.notes);
-  assert.equal(saved.places[0].review,place.review);
+  assert.equal(saved.places.length,2);
+  const original=saved.places.find(p=>p.id===place.id);
+  assert.deepEqual(original.visitReports.map(r=>r.source),['self','friend']);
+  assert.equal(original.notes,place.notes);
+  assert.equal(original.review,place.review);
   assert.deepEqual(saved.vehicle,vehicle);
   await card.click();
   const selected=page.getByRole('button',{name:'导出这个地点'});
@@ -90,6 +115,7 @@ module.exports=async function visitSmoke(browser,device){
    await to.getByRole('tab',{name:'车友实测'}).click();
    await to.getByRole('button',{name:/车友合成车/}).waitFor();
    assert.equal(await to.getByText('设置「我的车辆」后对比',{exact:true}).count(),2);
+   assert.equal(await to.locator('.visit-summary').getByText('车友实测',{exact:true}).count(),2);
   }finally{await receiver.close();}
   console.log('Visit reports: own save, friend preview/cancel, add without field overwrite, compare four deltas, relaunch and repeat import.');
  }finally{await context.close();}

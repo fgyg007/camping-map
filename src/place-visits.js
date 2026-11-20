@@ -15,7 +15,8 @@ export function validateVisitReport(raw){
  const {model,lengthMm,widthMm,heightMm,clearanceMm=''}=v;
  const outcome=field(raw.outcome,80);
  if(!outcome)throw Error('请选择这次开到了哪里');
- return {id:raw.id,date,vehicle:{model,lengthMm,widthMm,heightMm,clearanceMm},outcome,approach:field(raw.approach,160),conditions:field(raw.conditions,160),notes:field(raw.notes,1000),photos:validatePhotos(raw.photos)};
+ const source=['self','friend'].includes(raw.source)?raw.source:undefined;
+ return {id:raw.id,date,vehicle:{model,lengthMm,widthMm,heightMm,clearanceMm},outcome,approach:field(raw.approach,160),conditions:field(raw.conditions,160),notes:field(raw.notes,1000),photos:validatePhotos(raw.photos),...(source?{source}:{})};
 }
 export function validateVisitReports(raw){
  if(raw===undefined)return [];

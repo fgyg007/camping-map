@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {planPlaceImport,previewPlaceImport} from './place-exchange.js';
+import {planPlaceImport,previewPlaceImport,prepareImportedPlace} from './place-exchange.js';
 import './place-exchange.css';
 
 function Dialog({title,onClose,children}){
@@ -75,14 +75,11 @@ function PlaceSummary({title,place,showPhotos=false,newVisitIds}){
  </div>;
 }
 
-export function PlaceImportDialog({existing,vehicle,document,onClose,onConfirm}){
+export function PlaceImportDialog({existing,vehicle,document,ownBackupDefault=false,onClose,onConfirm}){
  const [picked,setPicked]=useState(()=>new Set(document.places.map((_,i)=>i)));
- const [choices,setChoices]=useState({}),[ownBackup,setOwnBackup]=useState(false),[restoreVehicle,setRestoreVehicle]=useState(false);
- const plan=useMemo(()=>planPlaceImport(existing,document.places.filter((_,i)=>picked.has(i)).map(p=>{
-  if(ownBackup)return p;
-  const {rating,review,createdAt,...publicFields}=p;
-  return {...publicFields,favorite:false};
- }),{kind:document.kind}),[existing,document,picked,ownBackup]);
+ const [choices,setChoices]=useState({}),[ownBackup,setOwnBackup]=useState(ownBackupDefault),[restoreVehicle,setRestoreVehicle]=useState(false);
+ const plan=useMemo(()=>planPlaceImport(existing,document.places.filter((_,i)=>picked.has(i))
+  .map(place=>prepareImportedPlace(place,{ownBackup,kind:document.kind})),{kind:document.kind}),[existing,document,picked,ownBackup]);
  const preview=useMemo(()=>previewPlaceImport(plan,choices),[plan,choices]);
  const mergePreviews=[...preview.byId.values()];
  const previousReportIds=id=>new Set((plan.existing.find(p=>p.id===id)??plan.additions.find(p=>p.id===id))?.visitReports?.map(r=>r.id));
@@ -117,7 +114,7 @@ export function PlaceImportDialog({existing,vehicle,document,onClose,onConfirm})
   </details>}
   {preview.reportOverflow>0&&<p className="warning" role="alert">部分营地将超过 100 条实测，请减少导入选择；没有保存任何改动。</p>}
   <p className="hint">本机坐标、评分、点评和其他已填内容优先。仅添加实测不会改地点资料。合并时空项可补，设施和地点照片去重（最多 3 张），实测会去重追加。多条记录合并到一处时，按文件顺序补缺。</p>
-  {!document.kind&&<label className="checkbox"><input type="checkbox" checked={ownBackup} onChange={e=>{setOwnBackup(e.target.checked);setRestoreVehicle(false);setChoices({});}}/>这是我自己的备份，恢复新地点的个人点评和收藏</label>}
+  {!document.kind&&<label className="checkbox"><input type="checkbox" checked={ownBackup} onChange={e=>{setOwnBackup(e.target.checked);setRestoreVehicle(false);setChoices({});}}/>这是我自己的备份，保留实测来源，恢复新地点的个人点评和收藏</label>}
   {ownBackup&&!vehicle&&document.vehicle&&<label className="checkbox"><input type="checkbox" checked={restoreVehicle} onChange={e=>setRestoreVehicle(e.target.checked)}/>同时恢复备份中的车辆资料</label>}
   <div className="form-actions"><button type="button" onClick={onClose}>取消</button>
    <button type="button" className="primary" disabled={(!picked.size&&!restoreVehicle)||preview.reportOverflow>0} onClick={()=>onConfirm(plan,choices,restoreVehicle)}>确认导入</button></div>

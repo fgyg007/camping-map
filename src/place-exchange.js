@@ -19,7 +19,7 @@ export function makeSelectedExport(places, selectedIds, {includeNotes=false,incl
    heightLimit:p.heightLimit,verifiedAt:p.verifiedAt,facilities:p.facilities,
    ...(includeNotes&&p.notes?{notes:p.notes}:{}),
    ...(includePhotos&&p.photos?.length?{photos:p.photos}:{}),
-   ...(includeVisits&&p.visitReports?.length?{visitReports:p.visitReports}:{})};
+   ...(includeVisits&&p.visitReports?.length?{visitReports:p.visitReports.map(({source,...shared})=>shared)}:{})};
  });
  return JSON.stringify({version:projected.some(p=>p.visitReports?.length)?2:1,kind:SHARE_KIND,places:projected},null,2);
 }
@@ -35,10 +35,20 @@ export function parsePlaceImportDocument(text){
    // The selected-share format has no personal metadata; don't restore forged fields.
    const {id,name,lat,lng,category,status,heightLimit,verifiedAt,facilities,notes,photos,visitReports}=validated;
    return {id,name,lat,lng,category,status,heightLimit,verifiedAt,facilities,notes,
-    favorite:false,demo:false,...(photos?.length?{photos}:{}),...(visitReports?.length?{visitReports}:{})};
+    favorite:false,demo:false,...(photos?.length?{photos}:{}),...(visitReports?.length?{visitReports:asFriendReports(visitReports)}:{})};
   }
   return validated;
  }),vehicle:kind===SHARE_KIND?null:validateVehicle(data.vehicle)};
+}
+
+const asFriendReports=reports=>reports.map(r=>r.source==='friend'?r:{...r,source:'friend'});
+
+// An explicitly restored personal backup preserves its prior source, including an unknown source.
+// Files from another person cannot identify a report as written by the receiving user.
+export function prepareImportedPlace(place,{ownBackup=false,kind}={}){
+ if(ownBackup&&kind!==SHARE_KIND)return place;
+ const {rating,review,createdAt,visitReports,...publicFields}=place;
+ return {...publicFields,favorite:false,...(visitReports?.length?{visitReports:asFriendReports(visitReports)}:{})};
 }
 
 const nameKey=name=>name.normalize('NFKC').trim().replace(/\s+/gu,' ').toLowerCase();
@@ -104,7 +114,8 @@ export function planPlaceImport(existing,incoming,{kind}={}){
   atPoint.push(p);points.set(point,atPoint);
  };
  existing.forEach(index);
- for(const raw of incoming){
+ for(const incomingPlace of incoming){
+  const raw=kind===SHARE_KIND?prepareImportedPlace(incomingPlace,{kind}):incomingPlace;
   const unique=raw.visitReports?.length?addReports({},raw).place.visitReports:undefined;
   const p=unique&&unique.length!==raw.visitReports.length?{...raw,visitReports:unique}:raw;
   const key=nameKey(p.name);

@@ -20,4 +20,8 @@ test('report snapshots and validation preserve dated evidence without retaining 
  assert.throws(()=>validateVisitReport({...trip,date:'2026-02-30'}),/日期/);
  assert.throws(()=>validateVisitReport({...trip,vehicle:{...vehicle,clearanceMm:49}}),/离地间隙/);
  assert.throws(()=>validateVisitReport({...trip,photos:['https://example.com/a.jpg']}),/照片/);
+ assert.equal(validateVisitReport({...trip,source:'self'}).source,'self');
+ assert.equal(validateVisitReport({...trip,source:'friend'}).source,'friend');
+ assert.equal(Object.hasOwn(validateVisitReport(trip),'source'),false);
+ assert.equal(Object.hasOwn(validateVisitReport({...trip,source:'untrusted'}),'source'),false);
 });

@@ -19,9 +19,13 @@ module.exports=async function exchangeSmoke(browser,device){
   await opened.getByText(local.review,{exact:true}).waitFor();
   await opened.getByRole('button',{name:'编辑',exact:true}).click();
   const editor=page.getByRole('dialog',{name:'编辑地点'});
-  await editor.getByLabel('我的评分').selectOption('5');
-  await editor.getByLabel('我的短评').fill('更新后的私人短评');
-  await editor.getByRole('button',{name:'保存地点'}).click();
+  assert.equal(await editor.getByLabel('我的评分').count(),0);
+  await editor.getByRole('button',{name:'取消',exact:true}).click();
+  await opened.getByRole('button',{name:'编辑点评'}).click();
+  await opened.getByLabel('我的评分').selectOption('5');
+  await opened.getByLabel('我的短评').fill('更新后的私人短评');
+  await opened.getByRole('button',{name:'保存点评'}).click();
+  await opened.getByRole('button',{name:'关闭详情'}).click();
   await page.getByLabel('地点排序').selectOption('rating');
   assert.equal(await cards.locator('.card h3').first().textContent(),local.name);
   await cards.getByText(local.name,{exact:true}).click();

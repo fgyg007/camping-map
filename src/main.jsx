@@ -11,12 +11,12 @@ import {parseMapLink,mapLinkFromText,externalMapShortFromText,parseExternalMapLo
 import {PhotoEditor,PhotoGallery,VehicleEditor} from './preview-features.jsx';
 import {amapShortFromText,parseAmapLocation} from './amap-share.js';
 import {PlaceOverview} from './place-overview.jsx';
-import {PlaceRating,PlaceRatingEditor,PlaceSort} from './place-review.jsx';
+import {PlaceRating,PlaceSort} from './place-review.jsx';
 import {sortPlaces} from './place-review.js';
 import {applyPlaceImport,makeSelectedExport,parsePlaceImportDocument} from './place-exchange.js';
 import {PlaceExportDialog,PlaceImportDialog} from './place-exchange-ui.jsx';
 import {PlaceDetail} from './place-detail.jsx';
-import {PlaceVisits,VisitReader,VisitEditor} from './place-visits.jsx';
+import {PlaceVisits,VisitReader,VisitEditor,VisitFields,newVisitDraft,finalizeVisit} from './place-visits.jsx';
 const MapShare=registerPlugin('MapShare');
 const KEY='camping-map-v1';
 const symbols={'湖畔':Waves,'山野':Trees,'海边':Waves,'服务区':Car,'其他':Mountain};
@@ -71,6 +71,15 @@ function App(){
  const neighbors=browseIndex<0?{}:{previous:browseIds[browseIndex-1],next:browseIds[browseIndex+1]};
  function chooseImport(mode){importMode.current=mode;file.current.click();}
  function closeDetail(){setSelected(null);setBrowseIds([]);setVisitOverlay(null);setNoteOpen(false);}
+ function saveReview(id,values){
+  try{
+   const target=places.find(p=>p.id===id);
+   if(!target)return false;
+   const updated=validatePlace({...target,rating:values.rating,review:values.review});
+   if(!save(places.map(p=>p.id===id?updated:p)))return false;
+   message('已保存我的点评');return true;
+  }catch(e){message(e.message||'未能保存我的点评');return false;}
+ }
  function saveVisit(report){
   const existing=current.visitReports||[];
   const next=existing.some(r=>r.id===report.id)?existing.map(r=>r.id===report.id?report:r):[...existing,report];
@@ -140,7 +149,7 @@ function App(){
    const document=parsePlaceImportDocument(await f.text());
    if(mode==='friend'&&!document.kind)throw Error('这是完整备份，请用「恢复我的备份」。');
    if(mode==='backup'&&document.kind)throw Error('这是车友分享文件，请用「导入车友地点」。');
-   setExchange({type:'import',document});
+   setExchange({type:'import',document,ownBackupDefault:mode==='backup'});
   }catch(err){message('导入失败：'+err.message);}
  }
  function confirmImport(plan,choices,restoreVehicle){
@@ -168,8 +177,8 @@ function App(){
   <footer><span>野泊 / 个人露营手账</span><span>演示地点未经实测 · 出行前请核实开放与通行情况</span></footer>
   </main>
   {current&&!editing&&<div inert={Boolean(visitOverlay||noteOpen)}>
-   <PlaceDetail place={current} neighbors={neighbors} onSelect={setSelected} onClose={closeDetail}
-    overview={<><div className="tags"><span>{current.status}</span>{current.facilities.map(f=><span key={f}>{f}</span>)}</div><p className="notes">{current.notes?.length>120?current.notes.slice(0,120)+'…':current.notes||'暂无备注'}</p>{current.notes?.length>120&&<button type="button" onClick={()=>setNoteOpen(true)}>阅读完整备注</button>}<PlaceRating place={current} showReview/><dl><div><dt>现场限高</dt><dd>{current.heightLimit?`${current.heightLimit} 米`:'未记录，请现场确认'}</dd></div><div><dt>最近核实</dt><dd>{current.verifiedAt||'尚未核实'}</dd></div></dl>{current.demo&&<p className="warning">这是演示记录，不代表真实可露营地点。</p>}</>}
+   <PlaceDetail place={current} neighbors={neighbors} onSelect={setSelected} onClose={closeDetail} onSaveReview={saveReview}
+    overview={<><div className="tags"><span>{current.status}</span>{current.facilities.map(f=><span key={f}>{f}</span>)}</div><p className="notes">{current.notes?.length>120?current.notes.slice(0,120)+'…':current.notes||'暂无备注'}</p>{current.notes?.length>120&&<button type="button" onClick={()=>setNoteOpen(true)}>阅读完整备注</button>}<dl><div><dt>现场限高</dt><dd>{current.heightLimit?`${current.heightLimit} 米`:'未记录，请现场确认'}</dd></div><div><dt>最近核实</dt><dd>{current.verifiedAt||'尚未核实'}</dd></div></dl>{current.demo&&<p className="warning">这是演示记录，不代表真实可露营地点。</p>}</>}
     navigation={<><dl><div><dt>WGS-84 坐标</dt><dd>{current.lat.toFixed(6)}, {current.lng.toFixed(6)}</dd></div></dl><a className="primary navigation" href={navigationUrl(current)} target="_blank" rel="noreferrer"><Navigation size={18}/>Google 地图导航<ArrowUpRight size={17}/></a>{amapRoute(current)&&(Capacitor.getPlatform()==='android'
  ?<button type="button" className="primary navigation" onClick={async()=>{
   try{
@@ -197,7 +206,7 @@ function App(){
    if(!save(places,{nextVehicle:value}))return false;
    setVehicleOpen(false);message('已保存车辆：'+value.model);return true;
   }}/>}
-  {editing&&<Editor place={editing} saveError={editorError} onClose={()=>{setEditorError('');setEditing(null);}} onSave={p=>{
+  {editing&&<Editor place={editing} vehicle={vehicle} saveError={editorError} onClose={()=>{setEditorError('');setEditing(null);}} onSave={p=>{
    setEditorError('');
    const next=editing.id?places.map(x=>x.id===p.id?p:x):[p,...places];
    if(save(next,{editor:true})){
@@ -207,13 +216,29 @@ function App(){
    }
   }}/>}
   {exchange?.type==='export'&&<PlaceExportDialog places={places} initialIds={exchange.ids} onClose={()=>setExchange(null)} onExport={exportPicked}/>}
-  {exchange?.type==='import'&&<PlaceImportDialog existing={places} vehicle={vehicle} document={exchange.document} onClose={()=>setExchange(null)} onConfirm={confirmImport}/>}
+  {exchange?.type==='import'&&<PlaceImportDialog existing={places} vehicle={vehicle} document={exchange.document} ownBackupDefault={exchange.ownBackupDefault} onClose={()=>setExchange(null)} onConfirm={confirmImport}/>}
   {toast&&<div className="toast" role="status"><Check size={17}/>{toast}</div>}
  </div>
 }
-function Editor({place,onClose,onSave,saveError}){
+function Editor({place,vehicle,onClose,onSave,saveError}){
  const [draft,setDraft]=useState({name:'',lat:'',lng:'',category:'其他',status:'待核实',notes:'',facilities:[],heightLimit:'',verifiedAt:'',photos:[],...place}),[error,setError]=useState(''),[system,setSystem]=useState('wgs84'),[link,setLink]=useState(place.shareText||''),[preview,setPreview]=useState(null),[verificationLink,setVerificationLink]=useState(''),[importError,setImportError]=useState(''),[resolving,setResolving]=useState(false),[photoBusy,setPhotoBusy]=useState(false);
  const [conflict,setConflict]=useState(false);
+ const [firstVisit,setFirstVisit]=useState(()=>newVisitDraft(vehicle));
+ const [visitStarted,setVisitStarted]=useState(false);
+ function updateFirstVisit(key,value){
+  setVisitStarted(true);setFirstVisit(d=>({...d,[key]:value}));
+ }
+ function submitPlace(e){
+  e.preventDefault();
+  if(resolving||photoBusy||conflict)return;
+  setError('');
+  try{
+   const visit=draft.id||!visitStarted?null:finalizeVisit(firstVisit);
+   const creation=draft.id?{}:{createdAt:new Date().toISOString(),...(visit?{visitReports:[visit]}:{})};
+   onSave(validatePlace({...draft,...creation,...toWgs(draft.lat,draft.lng,system)}));
+  }catch(err){setError(err.message);}
+ }
+
  const request=useRef(0),draftRef=useRef(draft),owned=useRef({name:false,coordinates:false});
  const linkRef=useRef(link),autoRead=useRef(null),activeRead=useRef(null);
  function updateDraft(next){draftRef.current=next;setDraft(next);}
@@ -312,6 +337,6 @@ function Editor({place,onClose,onSave,saveError}){
    {conflict&&<div><p className="warning" role="status">表单已有坐标，未覆盖。请选择保留这组坐标，或整组替换。</p><button type="button" onClick={()=>applyImported(preview)}>替换为链接位置</button><button type="button" onClick={()=>{setConflict(false);setPreview(null);}}>保留当前坐标</button></div>}
   </div>}
   <p className="hint">粘贴高德、百度、腾讯、Google 地图链接，自动尝试填写，再核对并保存。查短链接需联网，不上传备注或保存链接。</p>
- </details><form onSubmit={e=>{e.preventDefault();if(resolving||photoBusy||conflict)return;setError('');try{onSave(validatePlace({...draft,...(!draft.id?{createdAt:new Date().toISOString()}:{}),...toWgs(draft.lat,draft.lng,system)}));}catch(err){setError(err.message);}}}><label>地点名称<input autoFocus required maxLength={80} value={draft.name} onChange={e=>set('name',e.target.value)} placeholder="例如：湖边停车场"/></label><label>输入坐标系<select disabled={resolving} value={system} onChange={e=>{owned.current.coordinates=false;setSystem(e.target.value);}}><option value="wgs84">GPS / WGS-84</option><option value="gcj02">高德 / 腾讯 (GCJ-02)</option><option value="bd09">百度经纬度 (BD-09)</option></select></label><div className="form-row"><label>纬度<input required disabled={resolving} type="number" step="any" min="-90" max="90" value={draft.lat} onChange={e=>set('lat',e.target.value)} placeholder="30.250000"/></label><label>经度<input required disabled={resolving} type="number" step="any" min="-180" max="180" value={draft.lng} onChange={e=>set('lng',e.target.value)} placeholder="120.150000"/></label></div><p className="hint">请选择与来源一致的坐标系。保存时近似转换为 WGS-84，仅有地点编号或坐标系不明的链接不会填入；百度桌面地址的画面中心只供确认。导航前请核对落点。</p><div className="form-row"><label>地点类型<select value={draft.category} onChange={e=>set('category',e.target.value)}>{categories.map(x=><option key={x}>{x}</option>)}</select></label><label>开放状态<select value={draft.status} onChange={e=>set('status',e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></label></div><fieldset><legend>已确认的设施</legend>{facilities.map(f=><label className="checkbox" key={f}><input type="checkbox" checked={draft.facilities.includes(f)} onChange={e=>set('facilities',e.target.checked?[...draft.facilities,f]:draft.facilities.filter(x=>x!==f))}/>{f}</label>)}</fieldset><div className="form-row"><label>实测限高（米，可不填）<input type="number" step="0.01" min="0.01" max="10" value={draft.heightLimit} onChange={e=>set('heightLimit',e.target.value)}/></label><label>核实日期（可不填）<input type="date" max={new Date().toISOString().slice(0,10)} value={draft.verifiedAt} onChange={e=>set('verifiedAt',e.target.value)}/></label></div><label>现场备注<textarea rows="3" maxLength={2000} value={draft.notes} onChange={e=>set('notes',e.target.value)} placeholder="入口路况、收费、夜间环境、是否允许过夜…"/></label><PlaceRatingEditor rating={draft.rating} review={draft.review} onChange={set}/><PhotoEditor photos={draft.photos} onChange={value=>set('photos',value)} busy={photoBusy} onBusy={setPhotoBusy}/>{(error||saveError)&&<p role="alert" className="warning">{error||saveError}</p>}<div className="form-actions"><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={resolving||photoBusy||conflict}><Check size={18}/>保存地点</button></div></form></section></div>
+ </details><form onSubmit={submitPlace}><label>地点名称<input autoFocus required maxLength={80} value={draft.name} onChange={e=>set('name',e.target.value)} placeholder="例如：湖边停车场"/></label><label>输入坐标系<select disabled={resolving} value={system} onChange={e=>{owned.current.coordinates=false;setSystem(e.target.value);}}><option value="wgs84">GPS / WGS-84</option><option value="gcj02">高德 / 腾讯 (GCJ-02)</option><option value="bd09">百度经纬度 (BD-09)</option></select></label><div className="form-row"><label>纬度<input required disabled={resolving} type="number" step="any" min="-90" max="90" value={draft.lat} onChange={e=>set('lat',e.target.value)} placeholder="30.250000"/></label><label>经度<input required disabled={resolving} type="number" step="any" min="-180" max="180" value={draft.lng} onChange={e=>set('lng',e.target.value)} placeholder="120.150000"/></label></div><p className="hint">请选择与来源一致的坐标系。保存时近似转换为 WGS-84，仅有地点编号或坐标系不明的链接不会填入；百度桌面地址的画面中心只供确认。导航前请核对落点。</p><div className="form-row"><label>地点类型<select value={draft.category} onChange={e=>set('category',e.target.value)}>{categories.map(x=><option key={x}>{x}</option>)}</select></label><label>开放状态<select value={draft.status} onChange={e=>set('status',e.target.value)}>{statuses.map(x=><option key={x}>{x}</option>)}</select></label></div><fieldset><legend>已确认的设施</legend>{facilities.map(f=><label className="checkbox" key={f}><input type="checkbox" checked={draft.facilities.includes(f)} onChange={e=>set('facilities',e.target.checked?[...draft.facilities,f]:draft.facilities.filter(x=>x!==f))}/>{f}</label>)}</fieldset><div className="form-row"><label>实测限高（米，可不填）<input type="number" step="0.01" min="0.01" max="10" value={draft.heightLimit} onChange={e=>set('heightLimit',e.target.value)}/></label><label>核实日期（可不填）<input type="date" max={new Date().toISOString().slice(0,10)} value={draft.verifiedAt} onChange={e=>set('verifiedAt',e.target.value)}/></label></div><label>现场备注<textarea rows="3" maxLength={2000} value={draft.notes} onChange={e=>set('notes',e.target.value)} placeholder="入口路况、收费、夜间环境、是否允许过夜…"/></label>{!place.id&&<fieldset className="first-visit"><legend>我的实测 · 首次到访</legend><VisitFields draft={firstVisit} onChange={updateFirstVisit} inline/>{visitStarted&&<button type="button" onClick={()=>{setFirstVisit(newVisitDraft(vehicle));setVisitStarted(false);setError('');}}>清空实测，先只收藏地点</button>}</fieldset>}<PhotoEditor photos={draft.photos} onChange={value=>set('photos',value)} busy={photoBusy} onBusy={setPhotoBusy}/>{(error||saveError)&&<p role="alert" className="warning">{error||saveError}</p>}<div className="form-actions"><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={resolving||photoBusy||conflict}><Check size={18}/>保存地点</button></div></form></section></div>
 }
 createRoot(document.getElementById('root')).render(<App/>);

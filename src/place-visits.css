@@ -18,3 +18,5 @@
 .visit-summary{border:1px solid #dce3d3;border-radius:9px;padding:10px 12px;background:#f5f8f0;justify-items:start}
 .visit-heading button{min-height:44px;background:#edf0e7;border-radius:7px;padding:6px 9px}
 @media(max-width:440px){.panel-footer{flex-wrap:wrap;gap:8px}.panel-footer button{min-height:40px}}
+
+.first-visit{display:grid;gap:10px;margin:12px 0;padding:12px;border:1px solid #d7dace;border-radius:12px}.first-visit>legend{font-weight:700;padding:0 5px}.visit-summary .visit-source{font-weight:650}

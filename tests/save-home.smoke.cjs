@@ -59,6 +59,7 @@ const assert=require('node:assert/strict');
  await page.waitForFunction(()=>document.querySelector('.editor form input')?.value==='合成分享营地');
  await page.getByRole('button',{name:'保存地点'}).click();
  const data=await page.evaluate(()=>JSON.parse(localStorage.getItem('camping-map-v1')).places.find(p=>p.name==='合成分享营地'));
+ assert.equal(Object.hasOwn(data,'visitReports'),false);
  assert.ok(Math.abs(data.lat-25)<0.02); assert.ok(Math.abs(data.lng-102)<0.02);
  if(process.argv[2]==='baseline'){
   assert.equal(await page.locator('.cards').getByText('合成分享营地').count(),0);
@@ -213,6 +214,7 @@ const assert=require('node:assert/strict');
   await require('./place-exchange.smoke.cjs')(b,devices['Pixel 7']);
   await require('./place-detail.smoke.cjs')(b,devices['Pixel 7']);
   await require('./place-visits.smoke.cjs')(b,devices['Pixel 7']);
+  await require('./place-private-review.smoke.cjs')(b,devices['Pixel 7']);
   const preview=require('./trial-features.smoke.cjs');
   await preview(b,devices['Pixel 7']);
  }
