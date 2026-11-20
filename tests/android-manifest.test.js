@@ -26,3 +26,18 @@ test('Baidu map page storage is isolated, cleared on entry and exit, and does no
   assert.match(resolver, /setBlockNetworkLoads\(true\)/);
   assert.doesNotMatch(resolver, /addJavascriptInterface\s*\(/);
 });
+
+test('official 野泊 uses an independent fixed package and non-trial label', () => {
+  const gradle = read('../android/app/build.gradle');
+  const config = JSON.parse(read('../capacitor.config.json'));
+  const labels = read('../android/app/src/main/res/values/strings.xml');
+  assert.equal(config.appId,'com.jlmac.yebo');
+  assert.equal(config.appName,'野泊');
+  assert.match(gradle,/applicationId "com\.jlmac\.yebo"/);
+  assert.match(gradle,/namespace = "com\.jlmac\.campingmap"/);
+  assert.match(gradle,/versionCode 13\b/);
+  assert.match(gradle,/versionName "1\.0\.0"/);
+  assert.match(labels,/<string name="app_name">野泊<\/string>/);
+  assert.match(labels,/<string name="title_activity_main">野泊<\/string>/);
+  assert.match(read('../index.html'),/<title>野泊<\/title>/);
+});
