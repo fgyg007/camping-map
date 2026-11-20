@@ -56,11 +56,11 @@ export function VehicleEditor({vehicle,onClose,onSave}){
    }}><option value="">其他品牌 / 不选品牌（手动录入）</option>{VEHICLE_BRANDS.map(value=><option key={value} value={value}>{value}</option>)}</select></label>
    <label>选择车型<select aria-label="选择车型" disabled={!brand||!choices.length} value={preset?.id||''} onChange={e=>{
     const p=choices.find(v=>v.id===e.target.value);
-    setForm(current=>p?{catalogId:p.id,model:p.model+' '+p.trim,lengthMm:p.lengthMm,widthMm:p.widthMm,heightMm:p.heightMm}:{...current,catalogId:''});
+    setForm(current=>p?{catalogId:p.id,model:p.model+' '+p.trim,lengthMm:p.lengthMm,widthMm:p.widthMm,heightMm:p.heightMm,clearanceMm:''}:{...current,catalogId:''});
    }}><option value="">{!brand?'请先选择品牌':choices.length?'请选择车型，或直接手填':'这个品牌暂无预设，请手动填写'}</option>{choices.map(v=><option value={v.id} key={v.id}>{v.model} · {v.trim}</option>)}</select></label>
    {preset&&<p className="hint">厂商参考：{preset.lengthMm} × {preset.widthMm} × {preset.heightMm} mm。<a href={preset.sourceUrl} target="_blank" rel="noreferrer">查看厂商资料</a></p>}
    <label>车型名称<input required maxLength={100} value={form.model} onChange={e=>setForm({...form,model:e.target.value})} placeholder="例如：我的改装床车"/></label>
-   <div className="vehicle-measures">{vehicleDimensions.map(({key,label,max})=><label key={key}>{label}（毫米）<input type="number" inputMode="numeric" min="500" max={max} step="1" value={form[key]} placeholder="未填写" onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}</div>
+   <div className="vehicle-measures">{vehicleDimensions.map(({key,label,max})=><label key={key}>{label}（毫米）<input type="number" inputMode="numeric" min="500" max={max} step="1" value={form[key]} placeholder="未填写" onChange={e=>setForm({...form,[key]:e.target.value})}/></label>)}<label>离地间隙（毫米，可选）<input type="number" inputMode="numeric" min="50" max="1200" step="1" value={form.clearanceMm??''} placeholder="未填写" onChange={e=>setForm({...form,clearanceMm:e.target.value})}/></label></div>
    <p className="hint">宽度请留意是否含后视镜；车高请计入行李架、升顶等加装件。尺寸不作为通行保证。</p>
    {issue&&<p className="warning" role="alert">{issue}</p>}
    <div className="form-actions"><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit"><Check size={18}/>保存车辆</button></div>

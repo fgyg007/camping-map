@@ -1,0 +1,96 @@
+const assert=require('node:assert/strict');
+const {readFile}=require('node:fs/promises');
+const origin='http://127.0.0.1:5179';
+const vehicle={catalogId:'',model:'本机合成车',lengthMm:5200,widthMm:2000,heightMm:1850,clearanceMm:170};
+const place={id:'synthetic-trip',name:'实测合成营地',lat:30,lng:110,category:'湖畔',status:'待核实',notes:'本机原始备注',review:'本机私人短评',rating:4,facilities:[],favorite:true};
+const visit={id:'friend-trip-1',date:'2026-11-18',vehicle:{model:'车友合成车',lengthMm:4780,widthMm:1880,heightMm:1770,clearanceMm:200},outcome:'只到停车场或入口',approach:'东入口',conditions:'晴'};
+const base={version:2,places:[place],vehicle};
+module.exports=async function visitSmoke(browser,device){
+ const context=await browser.newContext({...device,acceptDownloads:true});
+ try{
+  await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
+  await context.addInitScript(data=>{if(!localStorage.getItem('camping-map-v1'))localStorage.setItem('camping-map-v1',JSON.stringify(data));},base);
+  const page=await context.newPage();
+  await page.goto(origin);
+  const card=page.locator('.cards').getByText(place.name,{exact:true});
+  const open=async()=>{await card.click();await page.getByRole('tab',{name:'车友实测'}).click();};
+  await open();
+  await page.getByRole('button',{name:'添加实测'}).click();
+  await page.getByLabel('开到了哪里').selectOption('途中掉头');
+  await page.getByLabel('入口或路线（可选）').fill('东入口窄弯');
+  await page.getByRole('button',{name:'保存实测'}).click();
+  await page.getByText('途中掉头 · 东入口窄弯',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'关闭详情'}).click();
+  const input=page.locator('input[type=file][accept=".json,application/json"]');
+  const file={name:'friend.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:2,kind:'place-share',places:[{...place,notes:'车友不覆盖的备注',visitReports:[visit]}]}))};
+  const importDialog=page.getByRole('dialog',{name:'预览并确认导入'});
+  const setFrom=async label=>{
+   const chooser=page.waitForEvent('filechooser');
+   await page.getByRole('button',{name:label,exact:true}).click();
+   await (await chooser).setFiles(file);
+  };
+  await setFrom('恢复我的备份');
+  await page.getByRole('status').filter({hasText:'这是车友分享文件'}).waitFor();
+  assert.equal(await importDialog.count(),0);
+  await setFrom('导入车友地点');
+  await importDialog.waitFor();
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('camping-map-v1')).places[0].visitReports.length),1);
+  await importDialog.getByRole('button',{name:'取消',exact:true}).click();
+  await input.setInputFiles(file);
+  await importDialog.getByRole('button',{name:'确认导入'}).click();
+  await importDialog.waitFor({state:'hidden'});
+  await page.reload();
+  await open();
+  await page.getByRole('button',{name:/车友合成车/}).click();
+  const report=page.getByRole('dialog',{name:'实测详情'});
+  await report.getByText('长 42 cm',{exact:true}).waitFor();
+  await report.getByText('宽 12 cm',{exact:true}).waitFor();
+  await report.getByText('高 8 cm',{exact:true}).waitFor();
+  await report.getByText('低 3 cm',{exact:true}).waitFor();
+  await report.getByRole('button',{name:'关闭实测'}).click();
+  await page.getByRole('button',{name:'关闭详情'}).click();
+  await input.setInputFiles(file);
+  await importDialog.getByRole('button',{name:'确认导入'}).click();
+  await importDialog.waitFor({state:'hidden'});
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('camping-map-v1')));
+  assert.equal(saved.places.length,1);
+  assert.equal(saved.places[0].visitReports.length,2);
+  assert.equal(saved.places[0].notes,place.notes);
+  assert.equal(saved.places[0].review,place.review);
+  assert.deepEqual(saved.vehicle,vehicle);
+  await card.click();
+  const selected=page.getByRole('button',{name:'导出这个地点'});
+  const exportDialog=page.getByRole('dialog',{name:'导出选中地点'});
+  const download=async(withReports)=>{
+   await selected.click();
+   if(withReports)await exportDialog.getByRole('checkbox',{name:'包含车辆实测记录'}).check();
+   const pending=page.waitForEvent('download');
+   await exportDialog.getByRole('button',{name:'导出所选地点'}).click();
+   const result=await pending;
+   await exportDialog.waitFor({state:'hidden'});
+   return readFile(await result.path());
+  };
+  const plain=JSON.parse(await download(false));
+  assert.equal(plain.version,1);
+  assert.equal(Object.hasOwn(plain.places[0],'visitReports'),false);
+  const bytes=await download(true);
+  const rich=JSON.parse(bytes);
+  assert.equal(rich.version,2);
+  assert.equal(rich.places[0].visitReports.length,2);
+  assert.equal(Object.hasOwn(rich,'vehicle'),false);
+  for(const key of ['notes','favorite','rating','review'])assert.equal(Object.hasOwn(rich.places[0],key),false);
+  const receiver=await browser.newContext(device);
+  try{
+   const to=await receiver.newPage();
+   await to.goto(origin);
+   // Select file directly to model the OS picker, then confirm in the second clean profile.
+   await to.locator('input[type=file][accept=".json,application/json"]').setInputFiles({name:'shared.json',mimeType:'application/json',buffer:bytes});
+   await to.getByRole('button',{name:'确认导入'}).click();
+   await to.locator('.cards').getByText(place.name,{exact:true}).click();
+   await to.getByRole('tab',{name:'车友实测'}).click();
+   await to.getByRole('button',{name:/车友合成车/}).waitFor();
+   assert.equal(await to.getByText('设置「我的车辆」后对比',{exact:true}).count(),2);
+  }finally{await receiver.close();}
+  console.log('Visit reports: own save, friend preview/cancel, add without field overwrite, compare four deltas, relaunch and repeat import.');
+ }finally{await context.close();}
+};

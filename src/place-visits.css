@@ -1,0 +1,20 @@
+.visit-heading,.visit-bottom{display:flex;align-items:center;justify-content:space-between;gap:.65rem}
+.visit-panel h3,.visit-dialog h3{margin:.4rem 0}
+.visit-list{margin:.6rem 0;padding:0;list-style:none;display:grid;gap:.55rem}
+.visit-summary{width:100%;text-align:left;display:grid;gap:.25rem;white-space:normal;overflow-wrap:anywhere}
+.visit-summary strong,.visit-summary span{display:block}
+.visit-summary span{font-size:.9em}
+.visit-overlay{z-index:1100}
+.visit-dialog{display:flex;flex-direction:column;max-height:calc(100dvh - 1rem);width:min(100%,36rem);overflow:hidden;padding:0}
+.visit-scroll{overflow:auto;overscroll-behavior:contain;padding:1rem 1.2rem;min-height:0}
+.visit-scroll label{display:grid;gap:.25rem;margin:.55rem 0}
+.visit-scroll label input,.visit-scroll label select,.visit-scroll label textarea{width:100%;min-width:0}
+.visit-dims{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 .6rem}
+.visit-bottom{padding:.6rem 1rem max(.6rem,env(safe-area-inset-bottom));border-top:1px solid #ddd}
+.visit-bottom button{min-height:44px}
+.visit-notes{white-space:pre-wrap;overflow-wrap:anywhere}
+
+.visit-scroll input:not([type=file]),.visit-scroll select,.visit-scroll textarea{border:1px solid #dce3d3;background:#fff;border-radius:7px;padding:9px;color:#334b33}
+.visit-summary{border:1px solid #dce3d3;border-radius:9px;padding:10px 12px;background:#f5f8f0;justify-items:start}
+.visit-heading button{min-height:44px;background:#edf0e7;border-radius:7px;padding:6px 9px}
+@media(max-width:440px){.panel-footer{flex-wrap:wrap;gap:8px}.panel-footer button{min-height:40px}}

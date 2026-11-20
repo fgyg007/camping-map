@@ -76,6 +76,7 @@ const assert=require('node:assert/strict');
   assert.equal(tiles,0);
   if(process.env.CAMPING_SCREENSHOT)await page.screenshot({path:process.env.CAMPING_SCREENSHOT});
   await card.click();
+  await page.getByRole('tab',{name:'导航'}).click();
   await page.getByRole('button',{name:'高德路线规划'}).click();
   await page.waitForFunction(()=>window.amapRequests?.length===1);
   const request=await page.evaluate(()=>window.amapRequests[0]);
@@ -210,6 +211,8 @@ const assert=require('node:assert/strict');
   console.log('Android layout: offline first-screen list, zero tile requests, share save/reload, native route bridge and storage failure handled.');
   await require('./place-overview.smoke.cjs')(b,devices['Pixel 7']);
   await require('./place-exchange.smoke.cjs')(b,devices['Pixel 7']);
+  await require('./place-detail.smoke.cjs')(b,devices['Pixel 7']);
+  await require('./place-visits.smoke.cjs')(b,devices['Pixel 7']);
   const preview=require('./trial-features.smoke.cjs');
   await preview(b,devices['Pixel 7']);
  }

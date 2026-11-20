@@ -114,11 +114,13 @@ module.exports=async function trialFeatures(browser,device){
   await card.waitFor();
   await page.reload();
   await card.click();
+  await page.getByRole('tab',{name:'照片'}).click();
   await page.getByAltText('营地照片 1',{exact:true}).waitFor();
   assert.equal(await page.getByAltText('营地照片 1',{exact:true}).evaluate(img=>img.complete&&img.naturalWidth>0),true);
   await page.getByRole('button',{name:'查看营地照片 1'}).click();
   await page.getByAltText('放大营地照片 1').waitFor();
   await page.getByRole('button',{name:'关闭大图'}).click();
+  await page.getByRole('tab',{name:'导航'}).click();
   assert.match(await page.getByRole('link',{name:'百度地图看点'}).getAttribute('href'),/^https:\/\/api\.map\.baidu\.com\/marker/);
   await page.getByRole('button',{name:'关闭详情'}).click();
   const pending=page.waitForEvent('download');
@@ -145,11 +147,14 @@ module.exports=async function trialFeatures(browser,device){
    await restore.getByRole('status').filter({hasText:'已恢复车辆'}).waitFor();
    await restore.reload();
    await restore.locator('.cards').getByText('合成营地相册',{exact:true}).click();
+   await restore.getByRole('tab',{name:'照片'}).click();
    await restore.getByAltText('营地照片 1',{exact:true}).waitFor();
+   await restore.getByRole('tab',{name:'概览'}).click();
    await restore.getByRole('button',{name:'编辑',exact:true}).click();
    await restore.getByRole('button',{name:'移除照片 1'}).click();
    await restore.getByRole('button',{name:'保存地点'}).click();
    await restore.locator('.cards').getByText('合成营地相册',{exact:true}).click();
+   await restore.getByRole('tab',{name:'照片'}).click();
    assert.equal(await restore.getByAltText('营地照片 1',{exact:true}).count(),0);
   }finally{await restoreContext.close();}
   assert.deepEqual(errors,[]);

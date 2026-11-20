@@ -1,5 +1,6 @@
 import {validatePhotos} from './photos.js';
 import {validateVehicle} from './vehicle.js';
+import {validateVisitReports} from './place-visits.js';
 export const categories = ['湖畔','山野','海边','服务区','其他'];
 export const statuses = ['待核实','开放','关闭'];
 export const facilities = ['厕所','水源','供电','垃圾点'];
@@ -35,12 +36,24 @@ export function validatePlace(p) {
  if(p.heightLimit!=='' && p.heightLimit!=null && (!Number.isFinite(Number(p.heightLimit))||Number(p.heightLimit)<=0||Number(p.heightLimit)>10)) throw Error('限高应大于 0 且不超过 10 米');
  if(p.verifiedAt && !/^\d{4}-\d{2}-\d{2}$/.test(p.verifiedAt)) throw Error('核实日期格式无效');
  const photos=validatePhotos(p.photos);
+ const visitReports=validateVisitReports(p.visitReports);
  const review=p.review?.trim();
- return {id:typeof p.id==='string'?p.id:makePlaceId(),name:p.name.trim(),lat:Number(p.lat),lng:Number(p.lng),category:p.category,status:p.status,facilities:[...p.facilities],notes:p.notes||'',heightLimit:p.heightLimit ? Number(p.heightLimit):'',verifiedAt:p.verifiedAt||'',favorite:p.favorite===true,demo:p.demo===true,...(photos.length?{photos}:{}),...(p.rating?{rating:p.rating}:{}),...(review?{review}:{}),...(createdAt?{createdAt}:{})};
+ return {id:typeof p.id==='string'?p.id:makePlaceId(),name:p.name.trim(),lat:Number(p.lat),lng:Number(p.lng),category:p.category,status:p.status,facilities:[...p.facilities],notes:p.notes||'',heightLimit:p.heightLimit ? Number(p.heightLimit):'',verifiedAt:p.verifiedAt||'',favorite:p.favorite===true,demo:p.demo===true,...(photos.length?{photos}:{}),...(p.rating?{rating:p.rating}:{}),...(review?{review}:{}),...(createdAt?{createdAt}:{}),...(visitReports.length?{visitReports}:{})};
+}
+export function parseVisitDocumentShape(text){
+ const data=JSON.parse(text);
+ if(![1,2].includes(data?.version)||!Array.isArray(data.places)||data.places.length>5000)throw Error('备份格式不正确、版本不支持或超过 5000 个地点');
+ if(data.version===1&&(data.places.some(p=>p!=null&&Object.hasOwn(p,'visitReports'))||
+  (data.vehicle?.clearanceMm!=null&&data.vehicle.clearanceMm!=='')))throw Error('含实测或离地间隙的地点文件需要使用版本 2');
+ return data;
+}
+export function serializeBackupDocument(places,vehicle){
+ const rich=places.some(p=>p.visitReports?.length)||!!vehicle?.clearanceMm;
+ const data=rich?places:places.map(p=>{const {visitReports,...rest}=p;return rest;});
+ return JSON.stringify({version:rich?2:1,places:data,...(vehicle?{vehicle}:{})},null,2);
 }
 export function parseBackupDocument(text) {
- const data=JSON.parse(text);
- if(data.version!==1||!Array.isArray(data.places)||data.places.length>5000) throw Error('备份格式不正确或超过 5000 个地点');
+ const data=parseVisitDocumentShape(text);
  const places=data.places.map(validatePlace);
  if(new Set(places.map(p=>p.id)).size!==places.length) throw Error('备份中存在重复 ID');
  return {places,vehicle:validateVehicle(data.vehicle)};

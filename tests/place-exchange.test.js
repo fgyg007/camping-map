@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {parseBackupDocument} from '../src/data.js';
-import {makeSelectedExport,parsePlaceImportDocument,planPlaceImport,previewPlaceMerges,applyPlaceImport} from '../src/place-exchange.js';
+import {parseBackupDocument,serializeBackupDocument} from '../src/data.js';
+import {makeSelectedExport,parsePlaceImportDocument,planPlaceImport,previewPlaceMerges,previewPlaceImport,applyPlaceImport} from '../src/place-exchange.js';
 
 const photo=i=>'data:image/jpeg;base64,/9j/A'+i+'A=';
 const place=(id,changes={})=>({id,name:'合成地点 A',lat:30,lng:110,category:'湖畔',status:'待核实',facilities:[],notes:'',heightLimit:'',verifiedAt:'',demo:false,favorite:false,...changes});
@@ -127,4 +127,70 @@ test('preview shows one final result per place, reflecting choice changes and fi
   assert.deepEqual(applyPlaceImport(plan,secondOnly).places,[changedPreview,first]);
   assert.equal(stored.heightLimit,'');
  }
+});
+
+const ride=(id,edits={})=>({id,date:'2026-11-18',vehicle:{model:'合成实测车',lengthMm:5000,widthMm:1990,heightMm:1850,clearanceMm:175},outcome:'途中掉头',approach:'东入口',conditions:'雨后',notes:'谨慎掉头',photos:[photo(1)],...edits});
+test('visit export is explicit, versioned, and preserves a frozen snapshot without private profile or reviews',()=>{
+ const visit=ride('r1',{vehicle:{...ride('x').vehicle,catalogId:'not-shared',brand:'not-shared'},privateReview:'ignored'});
+ const p=place('p1',{notes:'私有备注',review:'私有短评',rating:4,visitReports:[visit]});
+ const regular=JSON.parse(makeSelectedExport([p],['p1']));
+ assert.equal(regular.version,1);
+ assert.equal(regular.places[0].visitReports,undefined);
+ const opted=makeSelectedExport([p],['p1'],{includeVisits:true});
+ const rich=JSON.parse(opted);
+ assert.equal(rich.version,2);
+ assert.equal(rich.places[0].notes,undefined);
+ assert.equal(rich.places[0].review,undefined);
+ assert.equal(rich.places[0].rating,undefined);
+ assert.deepEqual(parsePlaceImportDocument(opted).places[0].visitReports,[ride('r1')]);
+ assert.equal(parsePlaceImportDocument(opted).vehicle,null);
+ assert.throws(()=>parsePlaceImportDocument(JSON.stringify({...rich,version:1})),/版本 2/);
+ assert.throws(()=>parseBackupDocument(JSON.stringify({...rich,version:1})),/版本 2/);
+ const own=JSON.parse(serializeBackupDocument([p],{model:'本机车辆',clearanceMm:180}));
+ assert.equal(own.version,2);
+ assert.equal(parseBackupDocument(JSON.stringify(own)).places[0].review,p.review);
+ assert.equal(parseBackupDocument(JSON.stringify(own)).vehicle.clearanceMm,180);
+ assert.equal(JSON.parse(serializeBackupDocument([place('ordinary')])).version,1);
+ assert.equal(JSON.parse(serializeBackupDocument([place('ordinary')],{model:'本机车辆',clearanceMm:180})).version,2);
+});
+
+test('default report-only import on a matched camp preserves local fields and report collisions survive safely',()=>{
+ const existing=place('local',{notes:'本机备注',rating:5,review:'本机点评',favorite:true,visitReports:[ride('collides')]});
+ const other=place('remote',{notes:'车友备注',facilities:['水源'],visitReports:[ride('collides',{conditions:'晴'}),ride('same-data')]});
+ const plan=planPlaceImport([existing],[other],{kind:'place-share'});
+ assert.equal(plan.conflicts[0].defaultChoice,'reports');
+ const preview=previewPlaceImport(plan);
+ const result=applyPlaceImport(plan);
+ assert.equal(result.places.length,1);
+ assert.equal(result.places[0].notes,existing.notes);
+ assert.equal(result.places[0].review,existing.review);
+ assert.equal(result.places[0].favorite,existing.favorite);
+ assert.deepEqual(result.places[0].visitReports,[ride('collides'),ride('collides_copy2',{conditions:'晴'})]);
+ assert.deepEqual(preview.byId.get('local'),result.places[0]);
+ assert.equal(preview.addedReports,1);
+ assert.deepEqual(applyPlaceImport(plan,{0:'keep'}).places,[existing]);
+ assert.deepEqual(applyPlaceImport(plan,{0:'merge'}).places[0],{...result.places[0],facilities:['水源']});
+ const repeated=planPlaceImport(result.places,[other],{kind:'place-share'});
+ assert.equal(previewPlaceImport(repeated).addedReports,0);
+ assert.deepEqual(applyPlaceImport(repeated).places,result.places);
+});
+
+test('visit dedupe works among new records, and import never silently exceeds the report limit',()=>{
+ const d=planPlaceImport([],[place('p',{visitReports:[ride('r1'),ride('r2')]})]);
+ assert.equal(previewPlaceImport(d).addedReports,1);
+ assert.deepEqual(applyPlaceImport(d).places[0].visitReports,[ride('r1')]);
+ const filled=place('full',{visitReports:Array.from({length:100},(_,i)=>ride('r'+i,{notes:'记录 '+i}))});
+ const p=planPlaceImport([filled],[place('new',{visitReports:[ride('r1',{notes:'新记录'})]})]);
+ assert.equal(previewPlaceImport(p).reportOverflow,1);
+ assert.throws(()=>applyPlaceImport(p),/超过 100/);
+ assert.deepEqual(applyPlaceImport(p,{0:'keep'}).places,[filled]);
+});
+
+test('similar pins with different names require a human to choose report append',()=>{
+ const local=place('local'), incoming=place('new',{name:'另一个地点',visitReports:[ride('r1')]});
+ const plan=planPlaceImport([local],[incoming]);
+ assert.equal(plan.conflicts[0].reason,'same-pin');
+ assert.equal(plan.conflicts[0].defaultChoice,'keep');
+ assert.deepEqual(applyPlaceImport(plan).places,[local]);
+ assert.deepEqual(applyPlaceImport(plan,{0:'reports'}).places,[{...local,visitReports:[ride('r1')]}]);
 });

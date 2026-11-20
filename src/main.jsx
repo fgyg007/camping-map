@@ -5,7 +5,7 @@ import {Filesystem,Directory,Encoding} from '@capacitor/filesystem';
 import {Share} from '@capacitor/share';
 import {Tent,MapPin,Plus,Search,Heart,Map as MapIcon,List,ArrowUpRight,X,Download,Upload,Trash2,Navigation,Check,Mountain,Trees,Waves,Car, Pencil} from 'lucide-react';
 import './style.css';
-import {samples,categories,statuses,facilities,validatePlace,parseBackupDocument,navigationUrl,baiduMarkerUrl,baiduCandidateMarkerUrl} from './data.js';
+import {samples,categories,statuses,facilities,validatePlace,parseBackupDocument,serializeBackupDocument,navigationUrl,baiduMarkerUrl,baiduCandidateMarkerUrl} from './data.js';
 import {toWgs,amapRoute,wgsToGcj} from './coordinates.js';
 import {parseMapLink,mapLinkFromText,externalMapShortFromText,parseExternalMapLocation,isBaiduUidOnlyLocation,parseBaiduSharedPoiMarker} from './map-link.js';
 import {PhotoEditor,PhotoGallery,VehicleEditor} from './preview-features.jsx';
@@ -15,6 +15,8 @@ import {PlaceRating,PlaceRatingEditor,PlaceSort} from './place-review.jsx';
 import {sortPlaces} from './place-review.js';
 import {applyPlaceImport,makeSelectedExport,parsePlaceImportDocument} from './place-exchange.js';
 import {PlaceExportDialog,PlaceImportDialog} from './place-exchange-ui.jsx';
+import {PlaceDetail} from './place-detail.jsx';
+import {PlaceVisits,VisitReader,VisitEditor} from './place-visits.jsx';
 const MapShare=registerPlugin('MapShare');
 const KEY='camping-map-v1';
 const symbols={'湖畔':Waves,'山野':Trees,'海边':Waves,'服务区':Car,'其他':Mountain};
@@ -62,7 +64,25 @@ function App(){
  const [vehicle,setVehicle]=useState(initial.vehicle),[vehicleOpen,setVehicleOpen]=useState(false);
  const [order,setOrder]=useState('default'),[exchange,setExchange]=useState(null);
  const showMap=view==='map';
- const file=useRef(null);
+ const file=useRef(null),importMode=useRef(null);
+ const [visitOverlay,setVisitOverlay]=useState(null),[noteOpen,setNoteOpen]=useState(false),[browseIds,setBrowseIds]=useState([]);
+ function openPlace(id,collection){setBrowseIds(collection.map(p=>p.id));setSelected(id);}
+ const browseIndex=browseIds.indexOf(selected);
+ const neighbors=browseIndex<0?{}:{previous:browseIds[browseIndex-1],next:browseIds[browseIndex+1]};
+ function chooseImport(mode){importMode.current=mode;file.current.click();}
+ function closeDetail(){setSelected(null);setBrowseIds([]);setVisitOverlay(null);setNoteOpen(false);}
+ function saveVisit(report){
+  const existing=current.visitReports||[];
+  const next=existing.some(r=>r.id===report.id)?existing.map(r=>r.id===report.id?report:r):[...existing,report];
+  const updated=validatePlace({...current,visitReports:next});
+  if(!save(places.map(p=>p.id===current.id?updated:p)))return false;
+  setVisitOverlay(null);message('已保存实测');return true;
+ }
+ useEffect(()=>{
+  if(!visitOverlay&&!noteOpen)return;
+  const handle=e=>{if(e.key==='Escape'){e.preventDefault();if(visitOverlay)setVisitOverlay(null);else setNoteOpen(false);}};
+  document.addEventListener('keydown',handle);return ()=>document.removeEventListener('keydown',handle);
+ },[visitOverlay,noteOpen]);
  const filtered=sortPlaces(places.filter(p=>(category==='全部'||p.category===category)&&(!onlyFavorites||p.favorite)&&(p.name+p.notes+p.category+(p.review||'')).toLowerCase().includes(query.toLowerCase())),order);
  const current=places.find(p=>p.id===selected);
  useEffect(()=>{
@@ -80,7 +100,7 @@ function App(){
   if(storageError)return fail('请先导出原始数据，解决读取错误后重试。');
   if(next.length>5000)return fail('地点数量不能超过 5000 个，请先导出备份。');
   try{
-   const payload=JSON.stringify({version:1,places:next,...(nextVehicle?{vehicle:nextVehicle}:{})},null,2);
+   const payload=serializeBackupDocument(next,nextVehicle);
    if(new Blob([payload]).size>MAX_BACKUP_BYTES)return fail('本机记录已达到备份体积上限。请先导出备份，再整理照片。');
    localStorage.setItem(KEY,payload);
    if(localStorage.getItem(KEY)!==payload)throw Error();
@@ -103,7 +123,7 @@ function App(){
  }
  async function download(){
   try{
-   const raw=storageError?localStorage.getItem(KEY):JSON.stringify({version:1,places,...(vehicle?{vehicle}:{})},null,2);
+   const raw=storageError?localStorage.getItem(KEY):serializeBackupDocument(places,vehicle);
    await exportFile(raw,'营地备份','camping-map-backup.json',{rawRecovery:!!storageError});
    message('已生成备份文件');
   }catch{message('导出失败，请检查浏览器下载权限');}
@@ -114,10 +134,12 @@ function App(){
   message('已生成地点分享文件');
  }
  async function importFile(e){
-  const f=e.target.files[0];e.target.value='';if(!f)return;
+  const f=e.target.files[0],mode=importMode.current;importMode.current=null;e.target.value='';if(!f)return;
   try{
    if(f.size>MAX_BACKUP_BYTES)throw Error('备份文件不能超过 5 MB');
    const document=parsePlaceImportDocument(await f.text());
+   if(mode==='friend'&&!document.kind)throw Error('这是完整备份，请用「恢复我的备份」。');
+   if(mode==='backup'&&document.kind)throw Error('这是车友分享文件，请用「导入车友地点」。');
    setExchange({type:'import',document});
   }catch(err){message('导入失败：'+err.message);}
  }
@@ -137,15 +159,18 @@ function App(){
   {!showMap&&<div className="category-row">{['全部',...categories].map(c=><button key={c} className={category===c?'chip chosen':'chip'} onClick={()=>setCategory(c)}>{c==='全部'?'全部地点':c}</button>)}<span className="local-label"><span/>野泊不自动上传</span></div>}
   {incoming&&<div className="warning" role="status">收到地图分享。 <button type="button" disabled={!!editing} onClick={()=>{setEditing({shareText:incoming});setIncoming('');}}>预览分享地点</button> <button type="button" onClick={()=>setIncoming('')}>忽略</button></div>}
   {storageError&&<div role="alert" className="warning">{storageError}</div>}
-  {showMap?<PlaceOverview places={places} onSelect={setSelected} onClose={()=>setView('list')}/>:<section className="workspace list-mode">
+  {showMap?<PlaceOverview places={places} onSelect={id=>openPlace(id,sortPlaces(places,order))} onClose={()=>setView('list')}/>:<section className="workspace list-mode">
    <div className="places-panel"><div className="panel-heading"><div><h2>{onlyFavorites?'收藏的风景':'探索落脚点'}</h2><span>{filtered.length} 个地点 · 慢下来，去看看</span></div><PlaceSort value={order} onChange={setOrder}/></div>
-   <div className="cards">{filtered.length===0?<div className="empty"><Tent size={40}/><h3>下一站，由你发现</h3><p>试试其他筛选，或添加第一个地点。</p><button onClick={()=>setEditing({})}>添加地点 <Plus size={16}/></button></div>:filtered.map(p=>{const Icon=symbols[p.category];return <article key={p.id} className={'card '+(selected===p.id?'selected':'')}><button className="card-main" onClick={()=>{setSelected(p.id);}}><div className={'scenery scenery-'+p.category}>{p.photos?.[0]?<img src={p.photos[0]} alt="" loading="lazy"/>:<Icon size={30}/>}<span>{p.category}</span></div><div className="card-info"><div className="card-meta">{p.demo?'演示地点':'我的地点'}<span className={'status '+(p.status==='关闭'?'closed':'')}>{p.status}</span></div><h3>{p.name}</h3><PlaceRating place={p}/><p>{p.notes||'还没有备注，记录一些现场见闻吧。'}</p><div className="tags">{p.facilities.length?p.facilities.map(f=><span key={f}>{f}</span>):<span>设施待补充</span>}</div></div></button><button className={'favorite '+(p.favorite?'saved':'')} aria-label={`${p.favorite?'取消收藏':'收藏'}${p.name}`} onClick={()=>toggle(p)}><Heart size={17} fill={p.favorite?'currentColor':'none'}/></button></article>})}</div>
-   <div className="panel-footer"><button onClick={download}><Download size={15}/>导出备份</button><button onClick={()=>file.current.click()}><Upload size={15}/>导入备份</button><button onClick={()=>setExchange({type:'export',ids:[]})}><Download size={15}/>导出选中地点</button></div>{Capacitor.getPlatform()==='android'&&<p className="hint backup-privacy">野泊不自动上传营地、照片或车辆资料。根据手机设置，Android 系统备份可能包含这些数据。</p>}</div>
+   <div className="cards">{filtered.length===0?<div className="empty"><Tent size={40}/><h3>下一站，由你发现</h3><p>试试其他筛选，或添加第一个地点。</p><button onClick={()=>setEditing({})}>添加地点 <Plus size={16}/></button></div>:filtered.map(p=>{const Icon=symbols[p.category];return <article key={p.id} className={'card '+(selected===p.id?'selected':'')}><button className="card-main" onClick={()=>openPlace(p.id,filtered)}><div className={'scenery scenery-'+p.category}>{p.photos?.[0]?<img src={p.photos[0]} alt="" loading="lazy"/>:<Icon size={30}/>}<span>{p.category}</span></div><div className="card-info"><div className="card-meta">{p.demo?'演示地点':'我的地点'}<span className={'status '+(p.status==='关闭'?'closed':'')}>{p.status}</span></div><h3>{p.name}</h3><PlaceRating place={p}/><p>{p.notes||'还没有备注，记录一些现场见闻吧。'}</p><div className="tags">{p.facilities.length?p.facilities.map(f=><span key={f}>{f}</span>):<span>设施待补充</span>}</div></div></button><button className={'favorite '+(p.favorite?'saved':'')} aria-label={`${p.favorite?'取消收藏':'收藏'}${p.name}`} onClick={()=>toggle(p)}><Heart size={17} fill={p.favorite?'currentColor':'none'}/></button></article>})}</div>
+   <div className="panel-footer"><button onClick={download}><Download size={15}/>导出备份</button><button onClick={()=>chooseImport('friend')}><Upload size={15}/>导入车友地点</button><button onClick={()=>chooseImport('backup')}><Upload size={15}/>恢复我的备份</button><button onClick={()=>setExchange({type:'export',ids:[]})}><Download size={15}/>导出选中地点</button></div>{Capacitor.getPlatform()==='android'&&<p className="hint backup-privacy">野泊不自动上传营地、照片或车辆资料。根据手机设置，Android 系统备份可能包含这些数据。</p>}</div>
   </section>}
   <input hidden ref={file} type="file" accept=".json,application/json" onChange={importFile}/>
   <footer><span>野泊 / 个人露营手账</span><span>演示地点未经实测 · 出行前请核实开放与通行情况</span></footer>
   </main>
-  {current&&!editing&&<div className="overlay" onClick={()=>setSelected(null)}><section className="dialog detail" role="dialog" aria-modal="true" aria-label="地点详情" onClick={e=>e.stopPropagation()}><button className="close" aria-label="关闭详情" onClick={()=>setSelected(null)}><X/></button><div className={'detail-art scenery-'+current.category}><Tent size={62}/><span>{current.category} / {current.demo?'演示地点':'我的地点'}</span></div><div className="detail-body"><span className="eyebrow">YOUR NEXT STAY</span><h2>{current.name}</h2><div className="tags"><span>{current.status}</span>{current.facilities.map(f=><span key={f}>{f}</span>)}</div><p className="notes">{current.notes||'暂无备注'}</p><PlaceRating place={current} showReview/><PhotoGallery key={current.id} photos={current.photos}/><dl><div><dt>WGS-84 坐标</dt><dd>{current.lat.toFixed(6)}, {current.lng.toFixed(6)}</dd></div><div><dt>现场限高</dt><dd>{current.heightLimit?`${current.heightLimit} 米`:'未记录，请现场确认'}</dd></div><div><dt>最近核实</dt><dd>{current.verifiedAt||'尚未核实'}</dd></div></dl>{current.demo&&<p className="warning">这是演示记录，不代表真实可露营地点。</p>}<a className="primary navigation" href={navigationUrl(current)} target="_blank" rel="noreferrer"><Navigation size={18}/>Google 地图导航<ArrowUpRight size={17}/></a>{amapRoute(current)&&(Capacitor.getPlatform()==='android'
+  {current&&!editing&&<div inert={Boolean(visitOverlay||noteOpen)}>
+   <PlaceDetail place={current} neighbors={neighbors} onSelect={setSelected} onClose={closeDetail}
+    overview={<><div className="tags"><span>{current.status}</span>{current.facilities.map(f=><span key={f}>{f}</span>)}</div><p className="notes">{current.notes?.length>120?current.notes.slice(0,120)+'…':current.notes||'暂无备注'}</p>{current.notes?.length>120&&<button type="button" onClick={()=>setNoteOpen(true)}>阅读完整备注</button>}<PlaceRating place={current} showReview/><dl><div><dt>现场限高</dt><dd>{current.heightLimit?`${current.heightLimit} 米`:'未记录，请现场确认'}</dd></div><div><dt>最近核实</dt><dd>{current.verifiedAt||'尚未核实'}</dd></div></dl>{current.demo&&<p className="warning">这是演示记录，不代表真实可露营地点。</p>}</>}
+    navigation={<><dl><div><dt>WGS-84 坐标</dt><dd>{current.lat.toFixed(6)}, {current.lng.toFixed(6)}</dd></div></dl><a className="primary navigation" href={navigationUrl(current)} target="_blank" rel="noreferrer"><Navigation size={18}/>Google 地图导航<ArrowUpRight size={17}/></a>{amapRoute(current)&&(Capacitor.getPlatform()==='android'
  ?<button type="button" className="primary navigation" onClick={async()=>{
   try{
    const gcj=wgsToGcj(current);
@@ -160,7 +185,14 @@ function App(){
    if(result.target==='web')message('未能打开百度地图 App，已改用网页。');
   }catch{message('未能打开百度地图。可复制坐标后手动在地图中打开。');}
  }}><MapPin size={18}/>百度地图看点<ArrowUpRight size={17}/></button>
- :<a className="primary navigation" href={baiduMarkerUrl(current)} target="_blank" rel="noreferrer"><MapPin size={18}/>百度地图看点<ArrowUpRight size={17}/></a>}<p className="hint">打开地图会把目的地坐标发送给对应地图服务。导航需要网络；也可复制坐标到支持 WGS-84 的地图。</p><div className="detail-actions"><button onClick={async()=>{try{await navigator.clipboard.writeText(`${current.lat}, ${current.lng}`);message('已复制 WGS-84 坐标');}catch{message('无法自动复制，请长按坐标手动复制');}}}>复制坐标</button><button onClick={()=>setEditing(current)}><Pencil size={15}/>编辑</button>{!current.demo&&<button onClick={()=>setExchange({type:'export',ids:[current.id]})}><Download size={15}/>导出这个地点</button>}<button className="danger" onClick={()=>{if(confirm(`删除“${current.name}”？此操作不可撤销。`)&&save(places.filter(p=>p.id!==current.id))){setSelected(null);message('地点已删除');}}}><Trash2 size={15}/>删除</button></div></div></section></div>}
+ :<a className="primary navigation" href={baiduMarkerUrl(current)} target="_blank" rel="noreferrer"><MapPin size={18}/>百度地图看点<ArrowUpRight size={17}/></a>}<p className="hint">打开地图会把目的地坐标发送给对应地图服务。导航需要网络；也可复制坐标到支持 WGS-84 的地图。</p></>}
+    photos={current.photos?.length?<PhotoGallery key={current.id} photos={current.photos}/>:<p>暂无营地照片。</p>}
+    reports={<PlaceVisits place={current} vehicle={vehicle} onOpen={trip=>setVisitOverlay({trip,mode:'read'})} onEdit={trip=>setVisitOverlay({trip,mode:'edit'})}/>}
+    actions={<div className="detail-actions"><button onClick={async()=>{try{await navigator.clipboard.writeText(`${current.lat}, ${current.lng}`);message('已复制 WGS-84 坐标');}catch{message('无法自动复制，请长按坐标手动复制');}}}>复制坐标</button><button onClick={()=>setEditing(current)}><Pencil size={15}/>编辑</button>{!current.demo&&<button onClick={()=>setExchange({type:'export',ids:[current.id]})}><Download size={15}/>导出这个地点</button>}<button className="danger" onClick={()=>{if(confirm(`删除“${current.name}”？此操作不可撤销。`)&&save(places.filter(p=>p.id!==current.id))){closeDetail();message('地点已删除');}}}><Trash2 size={15}/>删除</button></div>}/>
+  </div>}
+  {noteOpen&&current&&<div className="overlay visit-overlay"><section className="dialog visit-dialog" role="dialog" aria-modal="true" aria-label="完整备注"><div className="visit-scroll"><h2>现场备注</h2><p className="visit-notes">{current.notes}</p></div><div className="visit-bottom"><button type="button" autoFocus onClick={()=>setNoteOpen(false)}>关闭备注</button></div></section></div>}
+  {visitOverlay?.mode==='read'&&<VisitReader trip={visitOverlay.trip} vehicle={vehicle} onEdit={trip=>setVisitOverlay({trip,mode:'edit'})} onClose={()=>setVisitOverlay(null)}/>}
+  {visitOverlay?.mode==='edit'&&<VisitEditor trip={visitOverlay.trip} vehicle={vehicle} onClose={()=>setVisitOverlay(null)} onSave={saveVisit}/>}
   {vehicleOpen&&<VehicleEditor vehicle={vehicle} onClose={()=>setVehicleOpen(false)} onSave={value=>{
    if(!save(places,{nextVehicle:value}))return false;
    setVehicleOpen(false);message('已保存车辆：'+value.model);return true;

@@ -12,6 +12,11 @@ export function validateVehicle(vehicle){
  const clean={model,catalogId:typeof vehicle.catalogId==='string'&&/^[a-z0-9-]{1,80}$/.test(vehicle.catalogId)?vehicle.catalogId:''};
  const brand=typeof vehicle.brand==='string'?vehicle.brand.trim():'';
  if(brand&&brand.length<=40)clean.brand=brand;
+ const clearance=vehicle.clearanceMm;
+ if(clearance!==''&&clearance!=null){
+  if(!['number','string'].includes(typeof clearance)||!/^\d{2,4}$/.test(String(clearance))||!Number.isInteger(Number(clearance))||Number(clearance)<50||Number(clearance)>1200)throw Error('离地间隙请填 50–1200 毫米，或留空');
+  clean.clearanceMm=Number(clearance);
+ }
  for(const {key,label,max} of vehicleDimensions){
   const value=vehicle[key];
   if(value===''||value==null){clean[key]='';continue;}
