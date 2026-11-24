@@ -2,7 +2,7 @@ name: Build Android APK
 on:
   push:
     branches: [main, 'feat/coordinate-navigation']
-    paths-ignore: ['docs/**', '*.md', '.github/workflows/android-smoke.yml', 'tests/android-installed.smoke.cjs']
+    paths-ignore: ['docs/**', '*.md', '.github/workflows/pages.yml', '.github/workflows/android-smoke.yml', 'tests/android-installed.smoke.cjs']
   workflow_dispatch:
 permissions:
   contents: read
