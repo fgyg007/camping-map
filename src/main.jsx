@@ -17,6 +17,13 @@ import {applyPlaceImport,makeSelectedExport,parsePlaceImportDocument} from './pl
 import {PlaceExportDialog,PlaceImportDialog} from './place-exchange-ui.jsx';
 import {PlaceDetail} from './place-detail.jsx';
 import {PlaceVisits,VisitReader,VisitEditor,VisitFields,newVisitDraft,finalizeVisit} from './place-visits.jsx';
+if (import.meta.env.PROD && !Capacitor.isNativePlatform() && 'serviceWorker' in navigator) {
+ const workerUrl = new URL('./sw.js', document.baseURI);
+ navigator.serviceWorker.register(workerUrl).catch(error => {
+  console.warn('离线缓存注册失败', error);
+ });
+}
+
 const MapShare=registerPlugin('MapShare');
 const KEY='camping-map-v1';
 const symbols={'湖畔':Waves,'山野':Trees,'海边':Waves,'服务区':Car,'其他':Mountain};

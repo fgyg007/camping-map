@@ -5,7 +5,7 @@
 先读本文件、`README.md`（功能边界与构建步骤）、`docs/QA.md`（已验证与未验证）、[完整原始方案](product/original-proposal.md)。
 
 - 原 Mac：继续 `/Volumes/Extreme SSD/dev/projects/camping-map`，先确认 SSD UUID 为 `8E1F3D62-518E-4C0F-8F7F-B3E208FA3EDC` 且挂载可写；Notes 当前记忆在 `/Volumes/notes/10-项目/个人项目/床车露营地图/管理/项目记忆.md`。
-- Dot / 云端：使用可访问私有仓库 `fgyg007/camping-map` 的工作区，无需 Mac、SSD 或 Notes。不要在云端照抄 `/Volumes` 路径。已有仓库先检查分支和未提交内容，不覆盖其他改动。
+- Dot / 云端：使用可访问公开仓库 `fgyg007/camping-map` 的工作区，无需 Mac、SSD 或 Notes。不要在云端照抄 `/Volumes` 路径。已有仓库先检查分支和未提交内容，不覆盖其他改动。
 
 在仓库根目录运行（Node.js 22+）：
 
@@ -18,11 +18,13 @@ npm run build
 
 ## 当前事实
 
-基础版已有个人营地库、在线地图、收藏筛选、详情、编辑和备份。技术栈 React + Leaflet + Capacitor，无后端。仓库目标 `fgyg007/camping-map`（私有），具体提交与云构建状态以 Notes 及 GitHub 为准。
+- Android 已发布正式签名 [v1.0.0](https://github.com/fgyg007/camping-map/releases/tag/v1.0.0)，包名 `com.jlmac.yebo`，版本号 13。旧测试包与正式包可并装，通过 JSON 备份迁移。现有 APK 可直接下载使用。
+- iPhone 使用共用 React / Vite 源码的 PWA。生产构建生成清单、图标和版本化 Service Worker 缓存，Capacitor 原生容器跳过注册。PWA 尚待 HTTPS 部署和 iPhone 真机验收。
+- 59 项单元测试、生产构建、Chrome 断网重开和数据留存、JSON 导出、Android 桥接模拟回归已通过。详细项目状态与规划以 NAS Notes 为准。
 
-## 车友试用的当前范围
+## 下一步
 
-用户指定先完成营地图片、百度和 Google 地图链接、常见车型尺寸与手动补录；暂不做「出发前检查」、通行判断、AI 解析或社区。Android 保持列表首页。核对 `docs/QA.md` 的功能验证和真机缺口后再发车友包：实测本地照片、备份恢复、真实分享样本、路线拉起与落点；老版有数据时不可先卸载或清数据，先验证签名升级方案。
+确定稳定的 HTTPS 地址并部署 PWA，然后按 README 和 QA 的清单在 iPhone 主屏幕模式验收。Android 继续使用当前正式 APK。
 
 ## 能跑的命令与端口
 
@@ -62,7 +64,7 @@ npm run build
 
 ## 给 Dot 的起始指令
 
-> 请接续私有仓库 fgyg007/camping-map。先读取 AGENTS.md、README.md、docs/RESUME.md、docs/QA.md 和完整方案 docs/product/original-proposal.md，检查当前分支与工作区，再运行 npm ci、npm test、npm run build。Android 已选 GitHub Actions 云端编译，不安装本机 Android 工具链。当前是 v0.1.0 基础版，请对照完整方案推进后续实现，优先国内地图/导航、坐标处理与分享导入，并完成受影响的测试和云端构建；真机验收单独记录。云端没有 Notes 或 SSD 时按仓库说明继续，不把演示地点当作真实营地。
+> 请接续公开仓库 fgyg007/camping-map。先读取 AGENTS.md、README.md、docs/RESUME.md、docs/QA.md 和完整方案 docs/product/original-proposal.md，检查当前分支与工作区，再运行 npm ci、npm test、npm run build。Android 已选 GitHub Actions 云端编译，不安装本机 Android 工具链。当前 Android 已正式发布 v1.0.0，iPhone PWA 源码已实现；先按本文件当前状态和任务授权继续。云端没有 Notes 或 SSD 时按仓库说明继续，不把演示地点当作真实营地。
 
 ### 微信位置引用候选
 

@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "野泊 · 床车露营地图",
+  "short_name": "野泊",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f6ee",
+  "theme_color": "#244c3b",
+  "icons": [
+    { "src": "icons/yebo-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/yebo-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
