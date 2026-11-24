@@ -138,9 +138,9 @@ npm run build
 
 ## iPhone 主屏幕版（PWA）
 
-PWA 源码已提供，公开访问地址待上线。地址上线后按以下步骤安装：
+按以下步骤把野泊添加到 iPhone 主屏幕：
 
-1. 在 iPhone 上用 Safari 打开野泊的 HTTPS 地址。
+1. 在 iPhone 上用 Safari 打开[野泊 PWA](https://fgyg007.github.io/camping-map/)。
 2. 点「分享 → 添加到主屏幕」。如有「作为网页 App 打开」选项，保持开启，再点「添加」。
 3. 从主屏幕打开「野泊」，首次打开保持联网，以便缓存应用文件。
 

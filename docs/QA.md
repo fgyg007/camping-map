@@ -130,3 +130,8 @@
 - 本地生产构建及 59 项单元测试通过。用手机尺寸 Chrome 验证 Service Worker 生效、断网刷新和重开、离线新建地点、数据留存和 JSON 下载。子目录离线启动通过。
 - Android 桥接模拟回归通过，模拟 Android 生产构建不会注册网页 Service Worker。正式 APK 继续使用已发布的 v1.0.0。
 - 待 HTTPS 部署后做 iPhone 真机验收：Safari 安装图标、主屏幕独立打开与安全区、飞行模式冷启动、相册格式、JSON 保存到「文件」并恢复、地图跳转返回和后台恢复。
+
+### GitHub Pages 上线检查
+
+- [首次部署](https://github.com/fgyg007/camping-map/actions/runs/45374045970)通过单元测试和生产构建。使用手机尺寸 Chrome 验证公开 HTTPS 入口、独立窗口清单、Service Worker 接管及断网刷新。
+- iPhone Safari 与主屏幕模式留待真机验收。

@@ -19,12 +19,12 @@ npm run build
 ## 当前事实
 
 - Android 已发布正式签名 [v1.0.0](https://github.com/fgyg007/camping-map/releases/tag/v1.0.0)，包名 `com.jlmac.yebo`，版本号 13。旧测试包与正式包可并装，通过 JSON 备份迁移。现有 APK 可直接下载使用。
-- iPhone 使用共用 React / Vite 源码的 PWA。生产构建生成清单、图标和版本化 Service Worker 缓存，Capacitor 原生容器跳过注册。PWA 尚待 HTTPS 部署和 iPhone 真机验收。
+- iPhone 使用共用 React / Vite 源码的 PWA。生产构建生成清单、图标和版本化 Service Worker 缓存，Capacitor 原生容器跳过注册。PWA 已部署到 [GitHub Pages](https://fgyg007.github.io/camping-map/)，iPhone 真机验收待完成。
 - 59 项单元测试、生产构建、Chrome 断网重开和数据留存、JSON 导出、Android 桥接模拟回归已通过。详细项目状态与规划以 NAS Notes 为准。
 
 ## 下一步
 
-确定稳定的 HTTPS 地址并部署 PWA，然后按 README 和 QA 的清单在 iPhone 主屏幕模式验收。Android 继续使用当前正式 APK。
+用 GitHub Pages 地址按 README 和 QA 的清单在 iPhone 主屏幕模式验收。Android 继续使用当前正式 APK。
 
 ## 能跑的命令与端口
 
